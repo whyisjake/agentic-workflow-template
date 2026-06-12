@@ -1,0 +1,85 @@
+# One-time setup: syncs all labels from .github/LABELS.yml into this repository.
+#
+# Run this once after using the template to create your repo:
+#   Actions → Setup Labels → Run workflow
+#
+# This workflow is idempotent — running it multiple times only updates colors
+# and descriptions; it never deletes labels or fails on existing labels.
+
+name: Setup Labels
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sync-labels:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sync labels from LABELS.yml
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const yaml = require('js-yaml');
+
+            const labelsFile = fs.readFileSync('.github/LABELS.yml', 'utf8');
+
+            // Strip comment lines before parsing (js-yaml handles # but let's be safe)
+            const labels = yaml.load(labelsFile);
+
+            if (!Array.isArray(labels)) {
+              core.setFailed('LABELS.yml must be a YAML array of label objects');
+              return;
+            }
+
+            let created = 0, updated = 0, errors = 0;
+
+            for (const label of labels) {
+              if (!label.name) continue; // skip comment-only entries
+
+              try {
+                // Try to create; if it exists, update instead
+                try {
+                  await github.rest.issues.createLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    name: label.name,
+                    color: label.color,
+                    description: label.description || ''
+                  });
+                  console.log(`✓ Created: ${label.name}`);
+                  created++;
+                } catch (err) {
+                  if (err.status === 422) {
+                    // Label already exists — update it
+                    await github.rest.issues.updateLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      name: label.name,
+                      color: label.color,
+                      description: label.description || ''
+                    });
+                    console.log(`↻ Updated: ${label.name}`);
+                    updated++;
+                  } else {
+                    throw err;
+                  }
+                }
+              } catch (err) {
+                console.error(`✗ Error on label "${label.name}": ${err.message}`);
+                errors++;
+              }
+            }
+
+            console.log('');
+            console.log(`Label sync complete: ${created} created, ${updated} updated, ${errors} errors`);
+
+            if (errors > 0) {
+              core.setFailed(`${errors} label(s) failed to sync. Check the log above.`);
+            }
