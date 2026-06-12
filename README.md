@@ -20,9 +20,21 @@ For `complexity:high` issues, Claude + Compound Engineering runs a planning phas
 
 ## Quickstart (5 minutes)
 
-**Step 1 — Use this template**
+**New repo** — Click **Use this template** → **Create a new repository** on GitHub.
 
-Click **Use this template** → **Create a new repository** on GitHub, then enable the template flag in Settings → General → "Template repository".
+**Existing repo** — Run the setup script from your repo root:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/whyisjake/agentic-workflow-template/main/scripts/setup.sh)
+```
+
+This copies all workflow files, skips anything that already exists, and prints next steps. Nothing is committed — you review first.
+
+---
+
+**Step 1 — Enable the template flag** *(new repos only)*
+
+Settings → General → check "Template repository".
 
 **Step 2 — Sync labels**
 
