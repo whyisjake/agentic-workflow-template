@@ -1,7 +1,7 @@
 ---
 title: "feat: GitHub Agentic Workflow Template Repository"
 type: feat
-status: active
+status: completed
 date: 2026-06-12
 ---
 
