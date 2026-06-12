@@ -1,0 +1,88 @@
+# Automatically adds 'agent-ready' label to issues that have all required sections.
+# This identifies issues that are properly scoped for agent execution.
+#
+# The auto-label runs a structural check only — it does not evaluate content quality.
+# A fully blank template (all headings present, no content filled in) will still pass.
+# The downstream agent prompt handles that case by commenting on the issue if it
+# lacks real content.
+#
+# CUSTOMIZATION: Edit the requiredSections array below to add or remove sections
+# that your team's issue template requires. The check looks for exact string matches
+# in the issue body.
+
+name: Auto-Label Agent-Ready Issues
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  check-and-label:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Check issue structure and apply label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || '';
+
+            // Required sections for an agent-ready issue.
+            // Edit this list to match your team's issue template.
+            const requiredSections = [
+              '## Summary',
+              '## Context',
+              '## Acceptance Criteria',
+              '## Scope',
+              '## Technical Notes'
+            ];
+
+            // Check if all required sections are present
+            const hasAllSections = requiredSections.every(section =>
+              body.includes(section)
+            );
+
+            // Check if scope has both in/out defined
+            const hasInScope = body.includes('**In scope:**') || body.includes('In scope:');
+            const hasOutScope = body.includes('**Out of scope:**') || body.includes('Out of scope:');
+            const hasScopeBoundaries = hasInScope && hasOutScope;
+
+            // Check if acceptance criteria has at least one checkbox
+            const hasAcceptanceCriteria = /- \[[ x]\]/.test(body);
+
+            const currentLabels = issue.labels.map(l => l.name);
+            const hasAgentReadyLabel = currentLabels.includes('agent-ready');
+
+            if (hasAllSections && hasScopeBoundaries && hasAcceptanceCriteria) {
+              if (!hasAgentReadyLabel) {
+                console.log('Issue meets agent-ready criteria, adding label');
+                try {
+                  await github.rest.issues.addLabels({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    labels: ['agent-ready']
+                  });
+                } catch (err) {
+                  // Most likely cause: label does not exist in the repo yet.
+                  // Fix: run the Setup Labels workflow (Actions → Setup Labels → Run workflow).
+                  core.setFailed(`Failed to add agent-ready label: ${err.message}. Ensure the label exists by running the Setup Labels workflow.`);
+                }
+              } else {
+                console.log('Issue already has agent-ready label — skipping');
+              }
+            } else {
+              // Log what's missing for debugging
+              console.log('Issue does not meet agent-ready criteria:');
+              console.log('  All required sections present:', hasAllSections);
+              if (!hasAllSections) {
+                requiredSections.forEach(s => {
+                  console.log(`    ${body.includes(s) ? '✓' : '✗'} ${s}`);
+                });
+              }
+              console.log('  Scope boundaries (in + out):', hasScopeBoundaries);
+              console.log('  Acceptance criteria checkbox:', hasAcceptanceCriteria);
+            }

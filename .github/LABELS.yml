@@ -1,0 +1,37 @@
+# Agent Workflow Labels
+# These labels power the agentic development workflow.
+# Run the Setup Labels workflow (Actions → Setup Labels → Run workflow) to sync these into your repo.
+
+# --- Readiness labels ---
+
+- color: 0E8A16
+  description: Issue is properly scoped for AI agent execution
+  name: agent-ready
+
+- color: D4C5F9
+  description: Issue screener flagged as a candidate — human review needed before promoting to agent-ready
+  name: agent-candidate
+
+- color: FBCA04
+  description: Requires agent planning phase before execution
+  name: needs-planning
+
+# --- Output labels ---
+
+- color: 1D76DB
+  description: PR was created by an AI agent
+  name: agent-generated
+
+# --- Complexity labels (used for routing in the trigger workflow) ---
+
+- color: C5DEF5
+  description: Single file change, clear pattern to follow
+  name: 'complexity:low'
+
+- color: BFD4F2
+  description: Multiple files, follows established patterns
+  name: 'complexity:medium'
+
+- color: 0052CC
+  description: Architectural decisions required — triggers planning phase with Claude+CE
+  name: 'complexity:high'
