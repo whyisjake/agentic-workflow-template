@@ -205,30 +205,30 @@ Before labeling an issue `agent-ready`:
 
 [Compound Engineering](https://github.com/anthropics/compound-engineering) is a Claude Code plugin that provides structured planning (`/ce-plan`) and work execution (`/ce-work`) skills.
 
-When `AGENT_PROVIDER=claude`, the trigger workflow uses CE automatically:
+> **Important:** CE plugin slash commands (`/ce-plan`, `/ce-work`) only work in a local, interactive Claude Code session where the plugin is installed. **They are not available in GitHub Actions CI.** The `agent-ready-trigger.yml` workflow uses direct prompts instead — Claude reads the issue, implements the fix, and opens a PR without the plugin. CE is an optional local enhancement, not a CI dependency.
 
-### Low/Medium Complexity Flow
-
-```
-agent-ready label applied
-        ↓
-agent-ready-trigger.yml fires
-        ↓
-Claude invokes /ce-work on the issue
-        ↓
-/ce-work reads the issue, implements the feature, opens a PR
-```
-
-### High Complexity Flow
+### CI Workflow: Low/Medium Complexity
 
 ```
 agent-ready label applied
         ↓
 agent-ready-trigger.yml fires
         ↓
-Claude invokes /ce-plan on the issue
+Claude reads issue via gh CLI, reads CLAUDE.md and key files
         ↓
-Plan committed to docs/plans/ on a branch
+Claude implements the feature, commits, and opens a PR
+```
+
+### CI Workflow: High Complexity
+
+```
+agent-ready label applied
+        ↓
+agent-ready-trigger.yml fires
+        ↓
+Claude reads issue, writes a plan to docs/plans/
+        ↓
+Plan committed on a branch
         ↓
 Claude posts comment: "Review plan → reply /approve-plan to implement"
         ↓
@@ -238,27 +238,25 @@ Human replies /approve-plan
         ↓
 plan-approval-gate.yml fires
         ↓
-Claude invokes /ce-work with the plan as context
-        ↓
-/ce-work implements the plan and opens a PR
+Claude reads the plan file and implements it, opens a PR
 ```
 
-### Using CE Interactively (Outside the Workflow)
+### Using CE Interactively (Local Sessions Only)
 
-You can also invoke CE manually in your local Claude Code session:
+If you have Compound Engineering installed locally, you can use it to plan and execute from your terminal — the output feeds into the same `docs/plans/` format the CI workflow reads:
 
 ```bash
-# Plan a feature from an issue
+# Plan a feature from an issue (local only)
 claude "/ce-plan [paste issue description or use issue URL]"
 
-# Execute a plan
+# Execute a plan (local only)
 claude "/ce-work docs/plans/2026-01-15-001-feat-my-feature-plan.md"
 
-# Or work from the issue directly
+# Or work from the issue directly (local only)
 claude "/ce-work Implement the feature described in GitHub issue #42"
 ```
 
-CE is a Claude Code plugin. Other providers use equivalent plain-language prompts without the CE skill layer — the workflow adapts the prompt accordingly.
+CE is an optional enhancement for local sessions. The CI workflow works without it.
 
 ---
 
