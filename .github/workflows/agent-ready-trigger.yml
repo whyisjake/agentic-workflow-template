@@ -36,6 +36,7 @@ jobs:
       github.event.label.name == 'agent-ready' &&
       (vars.AGENT_PROVIDER == 'claude' || vars.AGENT_PROVIDER == '')
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
       pull-requests: write
@@ -65,6 +66,18 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          settings: |
+            {
+              "permissions": {
+                "defaultMode": "acceptEdits",
+                "allow": [
+                  "Bash(git *)",
+                  "Bash(gh *)"
+                ]
+              }
+            }
+          # Uncomment to stream the full SDK output into the job log for debugging:
+          # show_full_output: true
           additional_permissions: |
             actions: read
           prompt: |
@@ -100,6 +113,18 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          settings: |
+            {
+              "permissions": {
+                "defaultMode": "acceptEdits",
+                "allow": [
+                  "Bash(git *)",
+                  "Bash(gh *)"
+                ]
+              }
+            }
+          # Uncomment to stream the full SDK output into the job log for debugging:
+          # show_full_output: true
           additional_permissions: |
             actions: read
           prompt: |
