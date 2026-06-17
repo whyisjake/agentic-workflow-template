@@ -1,0 +1,79 @@
+# Lets a human revise an OPEN pull request by mentioning the agent in a comment.
+#
+# The rest of the template is one-shot per issue (the human reviews the PR and either
+# approves/merges or refines the issue and re-runs). This workflow closes the in-PR
+# feedback loop: when a reviewer comments "@claude <instruction>" on a PR — or leaves
+# it in a PR review — Claude Code runs in interactive "tag mode", checks out the PR's
+# head branch, makes the requested change, and pushes back to the same branch, which
+# re-runs your CI on the PR.
+#
+# Provider note: this is specific to the `claude` provider (it uses
+# anthropics/claude-code-action). The job no-ops unless AGENT_PROVIDER is `claude`
+# (or unset, which defaults to claude elsewhere in the template). If you use another
+# provider, add an equivalent feedback workflow for that tool.
+#
+# Loop safety: it fires only on comments that literally contain "@claude". The agent's
+# own progress/summary comments don't, so they create a run that immediately skips —
+# no self-triggering loop.
+
+name: Claude PR Feedback
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  claude-pr-feedback:
+    # Only for the claude provider, only on PR comments/reviews that mention @claude.
+    if: |
+      (vars.AGENT_PROVIDER == 'claude' || vars.AGENT_PROVIDER == '') &&
+      (
+        (github.event_name == 'issue_comment' && github.event.issue.pull_request != null && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review' && github.event.review.body != null && contains(github.event.review.body, '@claude'))
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code (tag mode)
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          trigger_phrase: "@claude"
+          # claude-code-action runs in interactive permission mode by default, so in CI
+          # every Write/Bash call blocks on an approval that never comes and the run hangs
+          # until timeout. Grant a headless, non-interactive permission set so the agent
+          # can actually edit files and use git/gh to push its fix.
+          settings: |
+            {
+              "permissions": {
+                "defaultMode": "acceptEdits",
+                "allow": [
+                  "Bash(git *)",
+                  "Bash(gh *)"
+                ]
+              }
+            }
+          # Uncomment to stream the full SDK output into the job log for debugging:
+          # show_full_output: true
+          additional_permissions: |
+            actions: read
