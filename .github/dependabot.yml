@@ -1,0 +1,17 @@
+# Actions in this repository are pinned to commit SHAs, because these workflow
+# files are copied into other repositories. Dependabot understands SHA pins when
+# the version is in a trailing comment (`@<sha> # v1.2.3`) and will keep both the
+# SHA and the comment up to date.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      github-actions:
+        patterns:
+          - 'actions/*'

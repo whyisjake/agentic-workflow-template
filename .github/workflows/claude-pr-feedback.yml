@@ -59,7 +59,7 @@ jobs:
       # fork PRs) with the token in scope. Runs BEFORE checkout. Mirrors plan-approval-gate.yml.
       - name: Check commenter permissions
         id: permission-check
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const p = context.payload;
@@ -86,13 +86,13 @@ jobs:
 
       - name: Checkout
         if: steps.permission-check.outputs.allowed == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
       - name: Run Claude Code (tag mode)
         if: steps.permission-check.outputs.allowed == 'true'
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@239e3a730883eeb5c53db12b0fc9573b3024b126 # v1.0.191
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           trigger_phrase: "@claude"
