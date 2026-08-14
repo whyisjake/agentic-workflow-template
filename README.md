@@ -46,7 +46,7 @@ Actions → Setup Labels → Run workflow
 
 **Step 3 — Configure your agent**
 
-Set a repository variable (`Settings → Secrets and variables → Variables`):
+`scripts/setup.sh` asks which provider you want and sets the `AGENT_PROVIDER` repository variable for you. Skip the prompt with `AGENT_PROVIDER=claude`, or skip the whole step with `SKIP_AGENT_SETUP=1`. Setting up by hand: `Settings → Secrets and variables → Actions → Variables`.
 
 | Variable | Value | Required secret |
 |----------|-------|-----------------|
@@ -56,6 +56,8 @@ Set a repository variable (`Settings → Secrets and variables → Variables`):
 | `AGENT_PROVIDER` | `custom` | _(your own listener — see docs)_ |
 
 If `AGENT_PROVIDER` is not set, the workflow defaults to `claude`.
+
+**The secret is yours to add.** Secrets are write-only, so no script can set one for you — `setup.sh` reports whether it is there and stops short of claiming you are done without it. This matters because nothing else complains: labels sync, CI goes green, and the repo looks configured, but labelling an issue `agent-ready` will not start the agent. Add it with `gh secret set CLAUDE_CODE_OAUTH_TOKEN`, or at `Settings → Secrets and variables → Actions → Secrets`.
 
 **Step 4 — Open an agent-ready issue**
 
