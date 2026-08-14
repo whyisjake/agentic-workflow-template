@@ -22,7 +22,8 @@
       "Bash(head *)",
       "Bash(tail *)",
       "Bash(echo *)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(bash scripts/validate-workflows.sh)"
     ],
     "deny": []
   }

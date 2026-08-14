@@ -72,7 +72,8 @@ jobs:
                 "defaultMode": "acceptEdits",
                 "allow": [
                   "Bash(git *)",
-                  "Bash(gh *)"
+                  "Bash(gh *)",
+                  "Bash(bash scripts/validate-workflows.sh)"
                 ]
               }
             }
@@ -119,7 +120,8 @@ jobs:
                 "defaultMode": "acceptEdits",
                 "allow": [
                   "Bash(git *)",
-                  "Bash(gh *)"
+                  "Bash(gh *)",
+                  "Bash(bash scripts/validate-workflows.sh)"
                 ]
               }
             }
@@ -152,6 +154,32 @@ jobs:
 
             If you are blocked or unclear on something, post a comment on the issue
             asking for clarification rather than guessing.
+
+            WRITING GITHUB ACTIONS WORKFLOW FILES:
+
+            Write every run: as a block scalar (run: |) by default. In a plain
+            run: line, a colon followed by a space is parsed as a mapping and the
+            whole file stops being valid YAML. Quoting does not save you — the
+            outer scalar is still plain:
+
+                run: echo $(( x > 0 ? 1 : 0 ))     # breaks
+                run: git commit -m "fix: thing"    # breaks too
+
+                run: |                             # fine — a colon is just a character
+                  git commit -m "fix: thing"
+
+            This matters more than it looks. GitHub cannot schedule a job from a
+            file it could not read, so the run ends in seconds with no jobs and
+            no log. That reads as broken code, not broken YAML, and it is easy to
+            spend a long time debugging the wrong thing.
+
+            Before opening the PR, if you added or changed anything under
+            .github/workflows/, run:
+
+                bash scripts/validate-workflows.sh
+
+            Fix whatever it reports and run it again. Do not open the PR while it
+            is failing.
 
       - name: Check for missing CLAUDE_CODE_OAUTH_TOKEN
         if: failure()

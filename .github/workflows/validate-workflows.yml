@@ -1,0 +1,30 @@
+# Parses every file in .github/workflows/ on any PR that touches one.
+#
+# The agent is instructed to run scripts/validate-workflows.sh before opening a
+# PR. This is the backstop for when it does not: an unparseable workflow file
+# does not stop other workflows from running, so this job still fires and fails
+# loudly, instead of the breakage surfacing later as a run with no jobs and no
+# log.
+
+name: Validate Workflows
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'scripts/validate-workflows.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Parse every workflow file
+        run: bash scripts/validate-workflows.sh

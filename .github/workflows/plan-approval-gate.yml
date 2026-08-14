@@ -119,7 +119,8 @@ jobs:
                 "defaultMode": "acceptEdits",
                 "allow": [
                   "Bash(git *)",
-                  "Bash(gh *)"
+                  "Bash(gh *)",
+                  "Bash(bash scripts/validate-workflows.sh)"
                 ]
               }
             }
@@ -145,6 +146,23 @@ jobs:
             - Stay within the issue's defined scope ("Out of scope" is a hard boundary)
             - Reference the issue number in the PR: "Closes #${{ github.event.issue.number }}"
             - If blocked or uncertain, comment on the issue asking for clarification
+
+            WRITING GITHUB ACTIONS WORKFLOW FILES:
+
+            Write every run: as a block scalar (run: |) by default. In a plain
+            run: line, a colon followed by a space is parsed as a mapping and the
+            whole file stops being valid YAML — including run: git commit -m
+            "fix: thing", where the quotes do not help because the outer scalar
+            is still plain. A file that does not parse produces a run with no
+            jobs and no log, which reads as broken code rather than broken YAML.
+
+            Before opening the PR, if you added or changed anything under
+            .github/workflows/, run:
+
+                bash scripts/validate-workflows.sh
+
+            Fix whatever it reports and run it again. Do not open the PR while it
+            is failing.
 
           additional_permissions: |
             actions: read

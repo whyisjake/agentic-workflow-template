@@ -90,7 +90,32 @@ Use the **Agent-Ready Task** issue template. Fill in all sections. When the issu
     ├── plan-approval-gate.yml   # /approve-plan comment listener (high complexity)
     ├── setup-labels.yml         # One-time label import
     ├── auto-label-agent-ready.yml # Auto-applies agent-ready to complete issues
-    └── issue-screener.yml       # Weekly screener for unscreened issues
+    ├── issue-screener.yml       # Weekly screener for unscreened issues
+    └── validate-workflows.yml   # Fails a PR whose workflow YAML doesn't parse
+scripts/
+└── validate-workflows.sh       # The parser behind that check — also run by the agent
+```
+
+### Workflow YAML guard
+
+A workflow file that doesn't parse fails quietly. GitHub can't schedule a job from a file it couldn't read, so the run ends in seconds with no jobs and no log — which reads as broken code rather than broken YAML.
+
+The usual cause is a colon followed by a space in a plain `run:` line. Quoting doesn't help, because the outer scalar is still plain:
+
+```yaml
+run: echo $(( x > 0 ? 1 : 0 ))     # breaks
+run: git commit -m "fix: thing"    # breaks too
+
+run: |                             # fine — a colon is just a character
+  git commit -m "fix: thing"
+```
+
+Both broken forms are lines an agent could reasonably write, so the guard has two halves: the agent prompts tell it to use block scalars and to run the validator before opening a PR, and `validate-workflows.yml` re-checks on every PR touching a workflow file, for when it doesn't.
+
+Run it yourself any time:
+
+```bash
+bash scripts/validate-workflows.sh
 ```
 
 ---
