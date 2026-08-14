@@ -7,6 +7,18 @@
 # Or clone and run locally:
 #   bash /path/to/agentic-workflow-template/scripts/setup.sh
 #
+# Installing from a fork or a mirror:
+#   Set TEMPLATE_REPO_URL to the raw base URL of the copy you want, and
+#   TEMPLATE_DOCS_URL to its web URL. Both are optional.
+#
+#     TEMPLATE_REPO_URL=https://raw.githubusercontent.com/<owner>/<repo>/<ref> \
+#       bash <(curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/<ref>/scripts/setup.sh)
+#
+#   Setting TEMPLATE_REPO_URL always wins, even when the script is run from a
+#   clone. If the copy you want has no anonymous raw URL — a private repo, or a
+#   host with no raw endpoint — clone it and run this script from that clone
+#   instead; local mode never touches the network.
+#
 # What this does:
 #   - Adds .github/ISSUE_TEMPLATE/agent-ready.md       (alongside existing templates)
 #   - Adds .github/PULL_REQUEST_TEMPLATE/agent-generated.md  (alongside existing templates)
@@ -26,8 +38,34 @@
 
 set -euo pipefail
 
-REPO_URL="https://raw.githubusercontent.com/whyisjake/agentic-workflow-template/main"
+REPO_URL_EXPLICIT="${TEMPLATE_REPO_URL:+yes}"
+REPO_URL="${TEMPLATE_REPO_URL:-https://raw.githubusercontent.com/whyisjake/agentic-workflow-template/main}"
+DOCS_URL="${TEMPLATE_DOCS_URL:-https://github.com/whyisjake/agentic-workflow-template}"
 TEMPLATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)" || true
+
+# Decide where files come from once, up front, instead of per file.
+#
+# fetch() used to try the local clone and fall back to REPO_URL whenever a file
+# was not found there. That fallback is silent: a clone that is incomplete, or a
+# TEMPLATE_DIR that resolved somewhere unexpected, downloads from the hardcoded
+# URL instead and the run still reports success. Deciding once means the source
+# is printed before anything is written, and a broken local clone fails loudly
+# rather than quietly installing someone else's copy.
+if [[ "$REPO_URL_EXPLICIT" == "yes" ]]; then
+  SOURCE_MODE="remote"
+elif [[ -n "$TEMPLATE_DIR" && -f "$TEMPLATE_DIR/.github/workflows/agent-ready-trigger.yml" ]]; then
+  SOURCE_MODE="local"
+else
+  SOURCE_MODE="remote"
+fi
+
+if [[ "$SOURCE_MODE" == "local" ]]; then
+  SOURCE_DESC="local clone at $TEMPLATE_DIR"
+  LABELS_SOURCE="$TEMPLATE_DIR/.github/LABELS.yml"
+else
+  SOURCE_DESC="$REPO_URL"
+  LABELS_SOURCE="$REPO_URL/.github/LABELS.yml"
+fi
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -37,14 +75,25 @@ red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
 bold()   { printf '\033[1m%s\033[0m\n' "$*"; }
 dim()    { printf '\033[2m%s\033[0m\n' "$*"; }
 
-# Download a file from the template repo, or copy from a local clone
+# Copy a file from the local clone, or download it — whichever mode was chosen
+# above. No fallback between the two: if the chosen source cannot supply a file,
+# that is an error worth stopping on.
 fetch() {
   local src="$1" dest="$2"
   mkdir -p "$(dirname "$dest")"
-  if [[ -n "$TEMPLATE_DIR" && -f "$TEMPLATE_DIR/$src" ]]; then
+  if [[ "$SOURCE_MODE" == "local" ]]; then
+    if [[ ! -f "$TEMPLATE_DIR/$src" ]]; then
+      red "Error: $src is missing from the template clone at $TEMPLATE_DIR"
+      red "       The clone looks incomplete. Re-clone it, or set TEMPLATE_REPO_URL to install from a URL."
+      exit 1
+    fi
     cp "$TEMPLATE_DIR/$src" "$dest"
   else
-    curl -fsSL "$REPO_URL/$src" -o "$dest"
+    if ! curl -fsSL "$REPO_URL/$src" -o "$dest"; then
+      red "Error: could not download $src from $REPO_URL"
+      red "       If that copy is private or has no raw URL, clone it and run this script from the clone."
+      exit 1
+    fi
   fi
 }
 
@@ -58,6 +107,7 @@ fi
 bold ""
 bold "Agentic Workflow Template — Setup"
 echo  "Adding agent-ready workflow files to: $(basename "$(pwd)")"
+echo  "Installing from: $SOURCE_DESC"
 echo  ""
 
 # ── Issue template ────────────────────────────────────────────────────────────
@@ -97,7 +147,7 @@ fi
 if [[ -f ".github/LABELS.yml" ]]; then
   yellow "  skipped (already exists): .github/LABELS.yml"
   echo   "  → To add agent labels, append these entries to your existing LABELS.yml:"
-  echo   "    $REPO_URL/.github/LABELS.yml"
+  echo   "    $LABELS_SOURCE"
 else
   fetch ".github/LABELS.yml" ".github/LABELS.yml"
   green "  added: .github/LABELS.yml"
@@ -160,5 +210,5 @@ echo "  4. Configure your agent (optional, defaults to claude):"
 echo "     Settings → Secrets and variables → Variables → AGENT_PROVIDER"
 echo "     Settings → Secrets and variables → Secrets → CLAUDE_CODE_OAUTH_TOKEN"
 echo ""
-echo "  Full docs: https://github.com/whyisjake/agentic-workflow-template"
+echo "  Full docs: $DOCS_URL"
 echo ""
