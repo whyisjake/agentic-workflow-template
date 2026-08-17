@@ -20,12 +20,25 @@ This guide teaches you how to write issues that agents can actually execute, how
 
 | Provider | AGENT_PROVIDER value | Required secret | Notes |
 |----------|---------------------|-----------------|-------|
-| Claude + Compound Engineering | `claude` (default) | `CLAUDE_CODE_OAUTH_TOKEN` | Full support — complexity-aware, planning phase for high complexity |
+| Claude + Compound Engineering | `claude` (default) | `CLAUDE_CODE_OAUTH_TOKEN` | Full support — complexity-aware, planning phase for high complexity. **Also needs the Claude GitHub App installed on the repository** |
 | OpenAI Codex | `openai-codex` | `OPENAI_API_KEY` | Stub — configure the `trigger-openai-codex` job |
 | GitHub Copilot (gh-aw) | `copilot` | _(gh-aw setup)_ | Stub — configure the `trigger-copilot` job |
 | Custom / bring-your-own | `custom` | _(your own)_ | Dispatches `repository_dispatch` event; add your listener |
 
 Set `AGENT_PROVIDER` in **Settings → Secrets and variables → Variables**. If not set, the workflow defaults to `claude`.
+
+### The Claude provider needs two things, not one
+
+The secret authenticates the model. The **Claude GitHub App** is what lets the action act on the repository — open branches, comment, push. `anthropics/claude-code-action` exchanges credentials for an app installation token as its first step, so with no app installed every run fails in seconds with:
+
+```
+App token exchange failed: 401 Unauthorized —
+Claude Code is not installed on this repository.
+```
+
+Install it at **https://github.com/apps/claude** (repository admin required), or run `/install-github-app` from Claude Code in a terminal, which sets up the app and the secret together.
+
+Nothing upstream of the agent notices this is missing: labels sync, the auto-labeler applies `agent-ready`, and the trigger workflow starts — so the failure looks like a broken agent rather than an unfinished setup. Check it before assuming the token is wrong.
 
 ---
 

@@ -48,16 +48,31 @@ Actions → Setup Labels → Run workflow
 
 Set a repository variable (`Settings → Secrets and variables → Variables`):
 
-| Variable | Value | Required secret |
-|----------|-------|-----------------|
-| `AGENT_PROVIDER` | `claude` (default) | `CLAUDE_CODE_OAUTH_TOKEN` |
-| `AGENT_PROVIDER` | `openai-codex` | `OPENAI_API_KEY` |
-| `AGENT_PROVIDER` | `copilot` | _(gh-aw setup required — see docs)_ |
-| `AGENT_PROVIDER` | `custom` | _(your own listener — see docs)_ |
+| Variable | Value | Required secret | Also required |
+|----------|-------|-----------------|---------------|
+| `AGENT_PROVIDER` | `claude` (default) | `CLAUDE_CODE_OAUTH_TOKEN` | **Claude GitHub App** — Step 4 |
+| `AGENT_PROVIDER` | `openai-codex` | `OPENAI_API_KEY` | — |
+| `AGENT_PROVIDER` | `copilot` | _(gh-aw setup required — see docs)_ | — |
+| `AGENT_PROVIDER` | `custom` | _(your own listener — see docs)_ | — |
 
 If `AGENT_PROVIDER` is not set, the workflow defaults to `claude`.
 
-**Step 4 — Open an agent-ready issue**
+**Step 4 — Install the Claude GitHub App** *(required for the `claude` provider)*
+
+Install it on this repository: **https://github.com/apps/claude** → **Configure** → select the repository. Repository admin is required.
+
+The secret on its own is not enough. `anthropics/claude-code-action` exchanges credentials for a GitHub App installation token before it does anything, and with no app installed that exchange fails:
+
+```
+App token exchange failed: 401 Unauthorized —
+Claude Code is not installed on this repository.
+```
+
+Labels sync, CI passes, and the trigger workflow still fires — so a repository can look completely configured while every agent run dies inside a minute. This applies to `claude-pr-feedback.yml` and `plan-approval-gate.yml` too, since both use the same action.
+
+If you have Claude Code in a terminal, `/install-github-app` walks through the app and the secret together.
+
+**Step 5 — Open an agent-ready issue**
 
 Use the **Agent-Ready Task** issue template. Fill in all sections. When the issue is complete, add the `agent-ready` label (or let the auto-labeler apply it) to start the agent.
 
