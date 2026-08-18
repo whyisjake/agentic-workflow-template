@@ -36,7 +36,7 @@ jobs:
       github.event.label.name == 'agent-ready' &&
       (vars.AGENT_PROVIDER == 'claude' || vars.AGENT_PROVIDER == '')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
       contents: write
       pull-requests: write
@@ -66,13 +66,33 @@ jobs:
         uses: anthropics/claude-code-action@239e3a730883eeb5c53db12b0fc9573b3024b126 # v1.0.191
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The permission mode has to be passed here. Setting
+          # permissions.defaultMode in `settings` below does NOT reach the SDK: a run
+          # so configured reports "permissionMode": "default", and in CI every Write
+          # blocks on an approval nobody can give. See the PR for the transcripts.
+          claude_args: --permission-mode acceptEdits
+          # Add your project's own test and lint commands to `allow` below —
+          # e.g. "Bash(npm *)", "Bash(php *)", "Bash(pytest *)". Without them the
+          # agent cannot verify its own work: it spends turns on commands that are
+          # refused, and a refusal reads to it like a broken environment rather than
+          # a policy decision.
           settings: |
             {
               "permissions": {
                 "defaultMode": "acceptEdits",
                 "allow": [
                   "Bash(git *)",
-                  "Bash(gh *)"
+                  "Bash(gh *)",
+                  "Bash(ls *)",
+                  "Bash(cat *)",
+                  "Bash(find *)",
+                  "Bash(xargs *)",
+                  "Bash(mkdir *)",
+                  "Bash(rm *)",
+                  "Bash(mv *)",
+                  "Bash(cp *)",
+                  "Bash(which *)",
+                  "Bash(curl *)"
                 ]
               }
             }
@@ -113,13 +133,33 @@ jobs:
         uses: anthropics/claude-code-action@239e3a730883eeb5c53db12b0fc9573b3024b126 # v1.0.191
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The permission mode has to be passed here. Setting
+          # permissions.defaultMode in `settings` below does NOT reach the SDK: a run
+          # so configured reports "permissionMode": "default", and in CI every Write
+          # blocks on an approval nobody can give. See the PR for the transcripts.
+          claude_args: --permission-mode acceptEdits
+          # Add your project's own test and lint commands to `allow` below —
+          # e.g. "Bash(npm *)", "Bash(php *)", "Bash(pytest *)". Without them the
+          # agent cannot verify its own work: it spends turns on commands that are
+          # refused, and a refusal reads to it like a broken environment rather than
+          # a policy decision.
           settings: |
             {
               "permissions": {
                 "defaultMode": "acceptEdits",
                 "allow": [
                   "Bash(git *)",
-                  "Bash(gh *)"
+                  "Bash(gh *)",
+                  "Bash(ls *)",
+                  "Bash(cat *)",
+                  "Bash(find *)",
+                  "Bash(xargs *)",
+                  "Bash(mkdir *)",
+                  "Bash(rm *)",
+                  "Bash(mv *)",
+                  "Bash(cp *)",
+                  "Bash(which *)",
+                  "Bash(curl *)"
                 ]
               }
             }
@@ -154,7 +194,7 @@ jobs:
             asking for clarification rather than guessing.
 
       - name: Check for missing CLAUDE_CODE_OAUTH_TOKEN
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |

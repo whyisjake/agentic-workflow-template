@@ -44,7 +44,7 @@ jobs:
         (github.event_name == 'pull_request_review' && github.event.review.body != null && contains(github.event.review.body, '@claude'))
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
       contents: write
       pull-requests: write
@@ -95,18 +95,38 @@ jobs:
         uses: anthropics/claude-code-action@239e3a730883eeb5c53db12b0fc9573b3024b126 # v1.0.191
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The permission mode has to be passed here. Setting
+          # permissions.defaultMode in `settings` below does NOT reach the SDK: a run
+          # so configured reports "permissionMode": "default", and in CI every Write
+          # blocks on an approval nobody can give. See the PR for the transcripts.
+          claude_args: --permission-mode acceptEdits
           trigger_phrase: "@claude"
           # claude-code-action runs in interactive permission mode by default, so in CI
           # every Write/Bash call blocks on an approval that never comes and the run hangs
           # until timeout. Grant a headless, non-interactive permission set so the agent
           # can actually edit files and use git/gh to push its fix.
+          # Add your project's own test and lint commands to `allow` below —
+          # e.g. "Bash(npm *)", "Bash(php *)", "Bash(pytest *)". Without them the
+          # agent cannot verify its own work: it spends turns on commands that are
+          # refused, and a refusal reads to it like a broken environment rather than
+          # a policy decision.
           settings: |
             {
               "permissions": {
                 "defaultMode": "acceptEdits",
                 "allow": [
                   "Bash(git *)",
-                  "Bash(gh *)"
+                  "Bash(gh *)",
+                  "Bash(ls *)",
+                  "Bash(cat *)",
+                  "Bash(find *)",
+                  "Bash(xargs *)",
+                  "Bash(mkdir *)",
+                  "Bash(rm *)",
+                  "Bash(mv *)",
+                  "Bash(cp *)",
+                  "Bash(which *)",
+                  "Bash(curl *)"
                 ]
               }
             }
