@@ -18,7 +18,7 @@ name: Agent-Ready Auto-Trigger
 
 on:
   issues:
-    types: [labeled]
+    types: [labeled, opened, edited]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -32,9 +32,7 @@ jobs:
   # complexity:low/medium (or absent) → /ce-work directly
   # ─────────────────────────────────────────────────────────────────────────────
   trigger-claude:
-    if: |
-      github.event.label.name == 'agent-ready' &&
-      (vars.AGENT_PROVIDER == 'claude' || vars.AGENT_PROVIDER == '')
+    if: vars.AGENT_PROVIDER == 'claude' || vars.AGENT_PROVIDER == ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -48,21 +46,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Determine complexity
-        id: complexity
+      # Labels come from the API, not from github.event. Two reasons: a `labeled`
+      # event carries one label, so an issue opened with agent-ready and
+      # complexity:high can route on whichever arrived first and skip the plan
+      # phase; and this workflow also runs on opened/edited, where there is no
+      # event label at all.
+      - name: Read the issue's labels
+        id: labels
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const labels = context.payload.issue.labels.map(l => l.name);
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+            });
+            const labels = issue.labels.map(l => (typeof l === 'string' ? l : l.name));
+            const ready = labels.includes('agent-ready');
             const isHigh = labels.includes('complexity:high');
-            console.log('Issue labels:', labels.join(', '));
-            console.log('complexity:high:', isHigh);
+            console.log('Issue labels:', labels.join(', ') || '(none)');
+            console.log('agent-ready:', ready, '| complexity:high:', isHigh);
+            core.setOutput('ready', ready ? 'true' : 'false');
             core.setOutput('is_high', isHigh ? 'true' : 'false');
+
+      - name: Stop unless the issue is agent-ready
+        if: steps.labels.outputs.ready != 'true'
+        run: echo "Not labelled agent-ready — nothing to do."
 
       # ── HIGH COMPLEXITY: plan first, then gate on /approve-plan ──────────────
       - name: Run Claude Code — Planning Phase (complexity:high)
         id: claude-plan
-        if: steps.complexity.outputs.is_high == 'true'
+        if: steps.labels.outputs.ready == 'true' && steps.labels.outputs.is_high == 'true'
         uses: anthropics/claude-code-action@239e3a730883eeb5c53db12b0fc9573b3024b126 # v1.0.191
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -109,7 +123,7 @@ jobs:
       # ── LOW/MEDIUM COMPLEXITY: execute directly ──────────────────────────────
       - name: Run Claude Code — Direct Execution (complexity:low/medium)
         id: claude-work
-        if: steps.complexity.outputs.is_high == 'false'
+        if: steps.labels.outputs.ready == 'true' && steps.labels.outputs.is_high == 'false'
         uses: anthropics/claude-code-action@239e3a730883eeb5c53db12b0fc9573b3024b126 # v1.0.191
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -180,7 +194,6 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   trigger-openai-codex:
     if: |
-      github.event.label.name == 'agent-ready' &&
       vars.AGENT_PROVIDER == 'openai-codex'
     runs-on: ubuntu-latest
     permissions:
@@ -221,7 +234,6 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   trigger-copilot:
     if: |
-      github.event.label.name == 'agent-ready' &&
       vars.AGENT_PROVIDER == 'copilot'
     runs-on: ubuntu-latest
     permissions:
@@ -259,7 +271,6 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   trigger-custom:
     if: |
-      github.event.label.name == 'agent-ready' &&
       vars.AGENT_PROVIDER == 'custom'
     runs-on: ubuntu-latest
     permissions:

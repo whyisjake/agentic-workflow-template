@@ -2,9 +2,14 @@
 name: '🤖 Agent-Ready Task'
 about: Well-scoped issue for AI-assisted development
 title: ''
-labels: 'agent-ready'
+labels: ''
 assignees: ''
 ---
+
+<!-- Applying the agent-ready label starts the agent. This template deliberately
+     does not apply it for you: a complexity:high issue needs its complexity label
+     on before the agent starts, or it takes the direct path and skips the planning
+     phase. Fill this in, add your complexity label, then add agent-ready yourself. -->
 
 ## Summary
 
