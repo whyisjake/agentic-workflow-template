@@ -126,6 +126,13 @@ jobs:
             7. Do NOT write any application code
             8. Do NOT open a pull request
 
+            If this repository depends on code you cannot read from here — a private
+            dependency, an API you cannot reach — do NOT guess its contract. Name the gap
+            in the plan, say which design decision rests on it, and state what you would
+            do instead if the assumption turns out to be wrong. An unverifiable interface
+            named in a plan is a question a reviewer can answer; guessed in code it is a
+            bug that passes review.
+
       # ── LOW/MEDIUM COMPLEXITY: execute directly ──────────────────────────────
       - name: Run Claude Code — Direct Execution (complexity:low/medium)
         id: claude-work
@@ -192,6 +199,12 @@ jobs:
 
             If you are blocked or unclear on something, post a comment on the issue
             asking for clarification rather than guessing.
+
+            If this repository depends on code you cannot read from here — a private
+            dependency, an API you cannot reach — do NOT guess its contract. Implement
+            what you can, and state the unverified assumption plainly in the PR body (or
+            in the plan) so a reviewer can check it. A confident PR built on a guessed
+            interface passes review and fails in production.
 
       - name: Check for missing CLAUDE_CODE_OAUTH_TOKEN
         if: failure() || cancelled()
