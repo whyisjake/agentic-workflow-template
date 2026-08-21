@@ -1,0 +1,146 @@
+# Reports when this copy of the template and the public copy diverge.
+#
+# This file lives on BOTH copies and runs on only one. The job is guarded on
+# the repository name, so on the public copy it is inert.
+#
+# That is deliberate. An enterprise-only file makes the two trees permanently
+# unequal, which means every sync needs a merge commit rather than a
+# fast-forward — and a mechanism built to prevent silent drift should not make
+# staying in sync harder. Identical trees fast-forward forever.
+#
+# scripts/setup.sh does not install it: it watches two internal copies and
+# means nothing inside a customer's repo.
+#
+# The direction is the whole point. A runner here can reach github.com; a
+# public runner cannot reach this host. So this is the only side from which
+# both trees are visible, and a check on the public side could only ever
+# compare that copy against itself.
+#
+# It compares CONTENT, not the presence of paths. When these copies last
+# drifted, seven files existed on both sides with different contents — every
+# one of them a workflow the customer would run. A manifest of filenames would
+# have reported everything fine.
+#
+# It reports; it never pushes. Which copy is canonical is an open question
+# (VIPPROD-1048), and a mechanism that silently picked a winner would decide it
+# by accident.
+
+name: Template Drift Check
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'   # Mondays, 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  compare:
+    # Only the enterprise copy can do this. A runner there can reach github.com;
+    # a public runner cannot reach the enterprise host, so the same job there
+    # could only compare that copy against itself.
+    if: github.repository == 'Automattic/agentic-workflow-template'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out this copy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: enterprise
+
+      - name: Fetch the public copy
+        id: fetch
+        run: |
+          if ! git clone --quiet --depth 1 \
+              https://github.com/whyisjake/agentic-workflow-template.git public; then
+            echo "reachable=false" >> "$GITHUB_OUTPUT"
+            echo "Could not reach the public copy. Reporting that, rather than reporting in-sync."
+            exit 0
+          fi
+          echo "reachable=true" >> "$GITHUB_OUTPUT"
+
+      - name: Compare the trees
+        id: compare
+        if: steps.fetch.outputs.reachable == 'true'
+        run: |
+          # Everything a customer repo receives. docs/ and the plan directory
+          # are deliberately excluded: they are prose, they drift for good
+          # reasons, and a diff there is noise rather than signal.
+          paths=(.github .claude scripts README.md)
+
+          # diff needs pairs; do it per path so a missing directory on one side
+          # is reported rather than aborting the run.
+          report=""
+          for p in "${paths[@]}"; do
+            if [[ ! -e "enterprise/$p" && ! -e "public/$p" ]]; then continue; fi
+            if [[ ! -e "enterprise/$p" ]]; then report+="only in public: $p"$'\n'; continue; fi
+            if [[ ! -e "public/$p" ]]; then report+="only in enterprise: $p"$'\n'; continue; fi
+            if ! out="$(diff -ru "enterprise/$p" "public/$p" 2>&1)"; then
+              report+="$out"$'\n'
+            fi
+          done
+
+          if [[ -z "$report" ]]; then
+            echo "in_sync=true" >> "$GITHUB_OUTPUT"
+            echo "The two copies agree."
+          else
+            echo "in_sync=false" >> "$GITHUB_OUTPUT"
+            printf '%s\n' "$report" | head -200 > drift.txt
+            echo "The copies differ:"
+            cat drift.txt
+          fi
+
+      - name: File an issue when they differ
+        if: steps.compare.outputs.in_sync == 'false'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require('fs');
+            const drift = fs.readFileSync('drift.txt', 'utf8').slice(0, 55000);
+            const title = 'Template drift: the enterprise and public copies disagree';
+
+            const { data: existing } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: 'template-drift', per_page: 20,
+            });
+            const body = [
+              'The copy customers receive and the copy `setup.sh` and the README point at',
+              'have diverged.',
+              '',
+              'This matters because the enterprise copy is what gets cloned into customer',
+              'repositories, while every documented install path reads the public one. When',
+              'these last drifted, seven workflow files differed and nobody noticed for two',
+              'merged pull requests.',
+              '',
+              '<details><summary>Diff</summary>',
+              '',
+              '```diff',
+              drift,
+              '```',
+              '',
+              '</details>',
+              '',
+              'Resolve by fast-forwarding whichever copy is behind. Which one is canonical is',
+              'still open — see VIPPROD-1048.',
+            ].join('\n');
+
+            if (existing.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: existing[0].number,
+                body: `Still drifting as of this run.\n\n${body}`,
+              });
+              return;
+            }
+            await github.rest.issues.create({
+              owner: context.repo.owner, repo: context.repo.repo,
+              title, body, labels: ['template-drift'],
+            });
+
+      - name: Say what could not be checked
+        if: steps.fetch.outputs.reachable == 'false'
+        run: |
+          echo "::warning::Could not reach the public copy — drift was not verified this run."
