@@ -9,8 +9,8 @@ Built on the workflow developed at [Pew Research Center](https://pewresearch.org
 ## How It Works
 
 1. A developer opens an issue using the **Agent-Ready template**
-2. When the issue is complete (all required sections filled), it's auto-labeled `agent-ready`
-3. The trigger workflow fires and routes to your configured AI agent
+2. When the issue has all the required sections, the auto-labeler flags it `agent-ready` — a hint that it looks ready, not a trigger
+3. A human adds `agent-ready` (or re-applies it), and the trigger workflow routes to your configured AI agent
 4. The agent implements the feature and opens a PR
 5. A human reviews and merges
 
@@ -72,7 +72,11 @@ If `AGENT_PROVIDER` is not set, the workflow defaults to `claude`.
 
 **Step 4 — Open an agent-ready issue**
 
-Use the **Agent-Ready Task** issue template. Fill in all sections. When the issue is complete, add the `agent-ready` label (or let the auto-labeler apply it) to start the agent.
+Use the **Agent-Ready Task** issue template. Fill in all sections, add a `complexity:` label, then **add `agent-ready` yourself** — that label is what starts the agent.
+
+The auto-labeler cannot start it for you. It applies `agent-ready` to issues that have the right shape, but a label applied by a workflow uses `GITHUB_TOKEN`, and GitHub does not start workflow runs from events triggered by that token. Treat its label as a review hint, not a trigger.
+
+Add the complexity label **before** `agent-ready`. The trigger reads the issue's labels from the API rather than from the event, so order no longer decides routing — but an issue that reaches the agent with no complexity label takes the direct path, and a `complexity:high` issue is meant to plan first.
 
 ---
 

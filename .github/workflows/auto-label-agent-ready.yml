@@ -1,5 +1,12 @@
 # Automatically adds 'agent-ready' label to issues that have all required sections.
-# This identifies issues that are properly scoped for agent execution.
+# This identifies issues that have the shape of an agent-ready issue.
+#
+# It does NOT start the agent. A label applied by this workflow uses GITHUB_TOKEN,
+# and GitHub does not start workflow runs from events triggered by that token — so
+# agent-ready-trigger.yml never sees it. A human applies the label to start a run.
+#
+# It also does not judge content: the check below is structural, so a template with
+# every heading present and nothing filled in passes it.
 #
 # The auto-label runs a structural check only — it does not evaluate content quality.
 # A fully blank template (all headings present, no content filled in) will still pass.
@@ -36,15 +43,20 @@ jobs:
             // Required sections for an agent-ready issue.
             // Edit this list to match your team's issue template.
             const requiredSections = [
-              '## Summary',
               '## Context',
               '## Acceptance Criteria',
               '## Scope',
               '## Technical Notes'
             ];
 
+            // The opening section is checked by shape, not by name. A hand-written
+            // issue that says "## What this is" instead of "## Summary" is not less
+            // ready than one that copied the template's headings, and exact-matching
+            // five literals rejected real issues over one word.
+            const hasOpeningSection = /^#{1,3} \S/m.test(body);
+
             // Check if all required sections are present
-            const hasAllSections = requiredSections.every(section =>
+            const hasAllSections = hasOpeningSection && requiredSections.every(section =>
               body.includes(section)
             );
 
@@ -82,6 +94,7 @@ jobs:
               console.log('Issue does not meet agent-ready criteria:');
               console.log('  All required sections present:', hasAllSections);
               if (!hasAllSections) {
+                console.log(`    ${hasOpeningSection ? '✓' : '✗'} an opening section (any heading)`);
                 requiredSections.forEach(s => {
                   console.log(`    ${body.includes(s) ? '✓' : '✗'} ${s}`);
                 });
