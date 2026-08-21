@@ -95,6 +95,30 @@ The auto-labeler does not apply `agent-ready` and cannot start a run. It applies
 
 Add the complexity label **before** `agent-ready`, and this order matters. Only the `agent-ready` label starts a run, and the trigger then reads the issue's full label set from the API — so a `complexity:high` issue that gains its complexity label *after* `agent-ready` has already fired will have taken the direct path and skipped planning.
 
+### Workflow and permission guard
+
+`scripts/validate-workflows.sh` does two things, and CI runs it on any PR touching a workflow.
+
+**It parses every workflow file.** A file that doesn't parse fails quietly — GitHub can't schedule a job from something it couldn't read, so the run ends in seconds with no jobs and no log, which reads as broken code rather than broken YAML. The usual cause is a colon-space in a plain `run:` line, and quoting doesn't help:
+
+```yaml
+run: echo $(( x > 0 ? 1 : 0 ))     # breaks
+run: git commit -m "fix: thing"    # breaks too
+
+run: |                             # fine — a colon is just a character
+  git commit -m "fix: thing"
+```
+
+**It rejects dangerous allow-list entries.** Every `allow` array in the workflows and in `.claude/settings.json` is checked for patterns that run an arbitrary program or reach the network — `find`, `xargs`, `curl`, `wget`, `sh`, `python`, `php` and friends, as wildcards or bare invocations. A pinned command with its own arguments is fine.
+
+This exists because those lists are hand-maintained across four call sites, a widened one looks identical in a green build, and the comments beside them are advisory text a hurried editor reads past. `git` and `gh` are deliberately absent from the denylist — the agent cannot commit or open a PR without them, which is documented in [AGENTIC_DEVELOPMENT.md](docs/AGENTIC_DEVELOPMENT.md).
+
+Run it yourself any time:
+
+```bash
+bash scripts/validate-workflows.sh
+```
+
 ---
 
 ## Provider Details
@@ -124,7 +148,10 @@ Add the complexity label **before** `agent-ready`, and this order matters. Only 
     ├── plan-approval-gate.yml   # /approve-plan comment listener (high complexity)
     ├── setup-labels.yml         # One-time label import
     ├── auto-label-agent-ready.yml # Auto-applies agent-ready to complete issues
-    └── issue-screener.yml       # Weekly screener for unscreened issues
+    ├── issue-screener.yml       # Weekly screener for unscreened issues
+    └── validate-workflows.yml   # Fails a PR whose workflow YAML or allow list is bad
+scripts/
+└── validate-workflows.sh       # The check behind that — also run by the agent
 ```
 
 ---

@@ -171,7 +171,8 @@ jobs:
                   "Bash(rm *)",
                   "Bash(mv *)",
                   "Bash(cp *)",
-                  "Bash(which *)"
+                  "Bash(which *)",
+                  "Bash(bash scripts/validate-workflows.sh)"
                 ],
                 "deny": [
                   "Bash(git -c *)",
@@ -213,6 +214,32 @@ jobs:
             - Stay within the issue's defined scope ("Out of scope" is a hard boundary)
             - Reference the issue number in the PR: "Closes #${{ github.event.issue.number }}"
             - If blocked or uncertain, comment on the issue asking for clarification
+
+
+            WRITING GITHUB ACTIONS WORKFLOW FILES:
+
+            Write every run: as a block scalar (run: |) by default. In a plain
+            run: line, a colon followed by a space is parsed as a mapping and the
+            whole file stops being valid YAML. Quoting does not save you — the
+            outer scalar is still plain:
+
+                run: echo $(( x > 0 ? 1 : 0 ))     # breaks
+                run: git commit -m "fix: thing"    # breaks too
+
+                run: |                             # fine
+                  git commit -m "fix: thing"
+
+            GitHub cannot schedule a job from a file it could not read, so the
+            run ends in seconds with no jobs and no log. That reads as broken
+            code rather than broken YAML.
+
+            Before opening the PR, if you added or changed anything under
+            .github/workflows/, run:
+
+                bash scripts/validate-workflows.sh
+
+            Fix what it reports and run it again. Do not open the PR while it
+            is failing.
 
             If this repository depends on code you cannot read from here — a private
             dependency, an API you cannot reach — do NOT guess its contract. Implement

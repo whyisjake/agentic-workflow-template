@@ -25,6 +25,7 @@
 #   - Adds .github/LABELS.yml  (or prints merge instructions if one already exists)
 #   - Adds .github/workflows/  (all agent workflow files, skips any that already exist)
 #   - Adds .github/agents/issue-screener.agent.md
+#   - Adds scripts/validate-workflows.sh  (the workflow YAML + permission guard)
 #   - Creates docs/ if it doesn't exist
 #   - Sets the AGENT_PROVIDER repository variable, and reports on the secret
 #   - Prints next steps
@@ -172,6 +173,7 @@ WORKFLOW_FILES=(
   ".github/workflows/setup-labels.yml"
   ".github/workflows/auto-label-agent-ready.yml"
   ".github/workflows/issue-screener.yml"
+  ".github/workflows/validate-workflows.yml"
 )
 
 for file in "${WORKFLOW_FILES[@]}"; do
@@ -190,6 +192,20 @@ if [[ -f ".github/agents/issue-screener.agent.md" ]]; then
 else
   fetch ".github/agents/issue-screener.agent.md" ".github/agents/issue-screener.agent.md"
   green "  added: .github/agents/issue-screener.agent.md"
+fi
+
+# ── Scripts ───────────────────────────────────────────────────────────────────
+# validate-workflows.sh installs alongside the workflows because both halves of
+# the guard depend on it: the agent is told to run it before opening a PR, and
+# validate-workflows.yml runs it in CI. Installing the workflow without the
+# script would leave the guard broken in the one repo that needs it.
+
+if [[ -f "scripts/validate-workflows.sh" ]]; then
+  yellow "  skipped (already exists): scripts/validate-workflows.sh"
+else
+  fetch "scripts/validate-workflows.sh" "scripts/validate-workflows.sh"
+  chmod +x "scripts/validate-workflows.sh"
+  green "  added: scripts/validate-workflows.sh"
 fi
 
 # ── docs/ directory ───────────────────────────────────────────────────────────
