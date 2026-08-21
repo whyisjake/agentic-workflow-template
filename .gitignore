@@ -1,0 +1,10 @@
+# Internal planning documents.
+#
+# docs/plans/ is where the agent workflow tells Claude to write plans, and those
+# are meant to ship alongside the code they describe. But a plan written about
+# this repository's own development can carry internal ticket IDs and links,
+# and this repository is public. One `git add -A` published one by accident.
+#
+# Ignore them here and commit deliberately with `git add -f` when a plan is
+# genuinely meant to be public.
+docs/plans/
