@@ -40,6 +40,17 @@ inputs:
     required: false
     default: |
       actions: read
+  report_issue_number:
+    description: >-
+      Issue to report a do-nothing run on. Leave empty to write the job summary
+      only — claude-pr-feedback.yml runs against a pull request comment, where
+      there is no issue to report to.
+    required: false
+    default: ""
+  github_token:
+    description: "Token used to post the do-nothing comment. Required with report_issue_number."
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -103,3 +114,134 @@ runs:
               ]
             }
           }
+
+    # ── Report what the run actually did ──────────────────────────────────────
+    #
+    # A run that finishes having done nothing still reports success, and the
+    # issue is told nothing at all. Observed on a scratch rig: one run spent 14
+    # turns and $0.27, reported is_error:false, and opened no pull request. The
+    # only trace was in the raw job log, where nobody looks.
+    #
+    # Everything needed is already in the execution log the action writes. Its
+    # final `result` record carries num_turns, total_cost_usd and
+    # permission_denials_count — the last one read 3, 9 and 10 across three real
+    # runs, and never reached a human. A denial count is not trivia: it is
+    # usually the agent being unable to run your test suite.
+    #
+    # The action exposes no `result` output, only a path to that log, so this
+    # reads the file rather than a convenient output.
+    - name: Summarise the run
+      if: always()
+      shell: bash
+      env:
+        EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+      run: |
+        {
+          echo "### Agent run"
+          echo ""
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        # A cancelled run — a timeout is a cancellation, not a failure — is
+        # killed mid-write, so the file may be truncated or absent. That
+        # absence is itself the signal, and is worth saying plainly rather
+        # than failing the reporter.
+        if [[ -z "${EXECUTION_FILE:-}" || ! -s "$EXECUTION_FILE" ]]; then
+          {
+            echo "The run ended before it reported. This is what a timeout looks like:"
+            echo "the agent was stopped part-way and its execution log was never finished."
+            echo ""
+            echo "If the work looked close, raise \`timeout-minutes\` on this job."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        # jq -s handles both a JSON array and a stream of concatenated
+        # objects, pretty-printed or not, so this does not depend on which
+        # shape the action happens to write.
+        result="$(jq -s '[.. | objects | select(.type? == "result")] | last' "$EXECUTION_FILE" 2>/dev/null)" || result=""
+
+        if [[ -z "$result" || "$result" == "null" ]]; then
+          echo "The execution log had no result record. See the raw job log." >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        turns="$(printf '%s' "$result" | jq -r '.num_turns // "?"')"
+        cost="$(printf '%s' "$result" | jq -r '.total_cost_usd // 0')"
+        denials="$(printf '%s' "$result" | jq -r '.permission_denials_count // 0')"
+        errored="$(printf '%s' "$result" | jq -r '.is_error // false')"
+
+        {
+          echo "| | |"
+          echo "|---|---|"
+          echo "| Turns | $turns |"
+          printf '| Cost | $%s |\n' "$cost"
+          echo "| Permission denials | $denials |"
+          echo "| Reported an error | $errored |"
+          echo ""
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        if [[ "$denials" != "0" ]]; then
+          {
+            echo "**$denials command(s) were refused by the allow list.**"
+            echo ""
+            echo "This is usually the agent being unable to run your project's tests."
+            echo "Add what it needs to the \`allow\` list in"
+            echo "\`.github/actions/claude-run/action.yml\` — for example"
+            echo "\`Bash(npm test)\` or \`Bash(pytest)\`. Prefer narrow patterns:"
+            echo "a wildcard is a subcommand you have not thought about yet."
+          } >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+        {
+          echo "turns=$turns"
+          echo "cost=$cost"
+          echo "denials=$denials"
+        } >> "$GITHUB_OUTPUT"
+      id: summary
+
+    # A run that produced no pull request is the failure mode that costs the
+    # most confidence, because nothing anywhere says so. The job is green, the
+    # issue is silent, and the customer is waiting for a PR that is not coming.
+    - name: Say so when the run produced nothing
+      if: always() && inputs.report_issue_number != '' && inputs.github_token != ''
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      with:
+        github-token: ${{ inputs.github_token }}
+        script: |
+          const n = Number('${{ inputs.report_issue_number }}');
+          const { data: prs } = await github.rest.pulls.list({
+            owner: context.repo.owner, repo: context.repo.repo,
+            state: 'open', per_page: 100,
+          });
+          const opened = prs.some(pr =>
+            pr.body && new RegExp(`(closes|fixes|resolves)\\s+#${n}\\b`, 'i').test(pr.body));
+          if (opened) return;
+
+          const turns   = '${{ steps.summary.outputs.turns }}'   || 'unknown';
+          const cost    = '${{ steps.summary.outputs.cost }}'    || 'unknown';
+          const denials = '${{ steps.summary.outputs.denials }}' || 'unknown';
+          const runUrl  = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+          const lines = [
+            '### The agent ran, but produced no pull request',
+            '',
+            `It spent **${turns} turn(s)** and **$${cost}**, and hit **${denials} permission denial(s)**.`,
+            '',
+            `Full detail: [job summary and log](${runUrl}).`,
+            '',
+          ];
+          if (denials && denials !== '0' && denials !== 'unknown') {
+            lines.push(
+              `The ${denials} refused command(s) are the first thing to check — that is usually the`,
+              'agent being unable to run this project\'s tests. Commands are granted in the',
+              '`allow` list in `.github/actions/claude-run/action.yml`.',
+              '');
+          }
+          lines.push(
+            'A run that changes nothing and reports success is the failure this template',
+            'exists to prevent, so it is reported here rather than left silent.');
+
+          await github.rest.issues.createComment({
+            owner: context.repo.owner, repo: context.repo.repo,
+            issue_number: n, body: lines.join('\n'),
+          });

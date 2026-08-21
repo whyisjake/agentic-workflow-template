@@ -66,6 +66,20 @@ Within that, prefer the narrowest pattern that does the job: `Bash(npm test)` ov
 
 **An agent cannot modify `.github/workflows/`.** The GitHub App token has no `workflows` permission, so a push touching a workflow file fails with `refusing to allow a GitHub App to create or update workflow ... without 'workflows' permission`. An agent that writes tests therefore cannot wire them into CI; it has to hand you the YAML and you paste it. Worth saying in the issue when the task involves CI.
 
+## What a run tells you
+
+Every agent run writes a summary to its job page: turns taken, cost, permission denials, and whether the SDK reported an error. When a run finishes without opening a pull request, it also comments on the issue saying so.
+
+That second part exists because the failure mode here is silence, and silence is worse than failure. A run that does nothing still reports success by default — the job is green, the issue says nothing, and the person who filed it waits for a pull request that is not coming. Observed on a test repository: a run spent 14 turns and $0.27, reported no error, and produced nothing at all. Nothing anywhere said so.
+
+**Read the permission-denial count first.** It is almost always the agent unable to run your tests. Across three real runs on a small Python repository the counts were 3, 9 and 10, and in every case the cause was the same: `Bash(python3 *)` was not in the allow list, so the agent wrote tests it could not execute. It said so honestly in its pull request rather than claiming they passed — but it could not verify its own work, and that is a setup problem, not an agent problem.
+
+Grant what your project needs in the `allow` list in `.github/actions/claude-run/action.yml`.
+
+**A cancelled run reports less.** A timeout is a cancellation, not a failure, and the agent is stopped part-way through writing its execution log. The summary will say the run ended before it reported. That absence is itself the signal: if the work looked close, raise `timeout-minutes`.
+
+---
+
 **Timeouts.** Jobs are capped at 30 minutes. A real feature on a small repo — three classes, two test files, iterating until the tests passed — took 20 minutes, so 15 was not enough. Raise it if your project's suite is slow; a stuck run with no cap consumes GitHub's 6-hour job limit.
 
 ---

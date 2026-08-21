@@ -190,6 +190,8 @@ jobs:
         uses: ./.github/actions/claude-run
         with:
           oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          report_issue_number: ${{ github.event.issue.number }}
+          github_token: ${{ github.token }}
           prompt: |
             You are planning the implementation for issue #${{ github.event.issue.number }}.
 
@@ -254,6 +256,8 @@ jobs:
         uses: ./.github/actions/claude-run
         with:
           oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          report_issue_number: ${{ github.event.issue.number }}
+          github_token: ${{ github.token }}
           prompt: |
             You are implementing issue #${{ github.event.issue.number }}.
 
