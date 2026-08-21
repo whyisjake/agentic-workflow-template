@@ -366,11 +366,8 @@ jobs:
         with:
           script: |
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.issue.number,
-              body: [
+            const MARKER = '<!-- agentic-workflow:failure-report -->';
+            const lines = [
                 '⚠️ **The agent run failed**',
                 '',
                 `The failing step and its error are in the [job log](${runUrl}) — start there.`,
@@ -383,8 +380,29 @@ jobs:
                 'A missing app shows up as `App token exchange failed: 401 Unauthorized` within a few seconds of the run starting.',
                 '',
                 'See the [README](../blob/main/README.md) for the full setup.'
-              ].join('\n')
+            ];
+            // Update in place. This comment used to stack: observed posting
+            // twice for one issue, and staying the newest word on the issue
+            // long after the cause was fixed and a later run had succeeded.
+            const body = [MARKER, ...lines].join('\n');
+            const { data: existing } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              per_page: 100,
             });
+            const mine = existing.find(c => c.body && c.body.includes(MARKER));
+            if (mine) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                comment_id: mine.id, body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: context.payload.issue.number, body,
+              });
+            }
 
   # ─────────────────────────────────────────────────────────────────────────────
   # OPENAI CODEX (stub)

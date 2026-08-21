@@ -68,6 +68,10 @@ Only `claude` runs an agent today. The `openai-codex` and `copilot` jobs echo a 
 
 If `AGENT_PROVIDER` is not set, the workflow defaults to `claude`.
 
+| Optional variable | Effect |
+|---|---|
+| `AGENT_DEBUG=true` | Streams Claude's full message history into the job log. **Off by default on purpose** — the stream includes tool results, and job logs are visible to anyone who can read the repository. See [AGENTIC_DEVELOPMENT.md](docs/AGENTIC_DEVELOPMENT.md). |
+
 **The secret is yours to add.** Secrets are write-only, so no script can set one for you — `setup.sh` reports whether it is there and stops short of claiming you are done without it. This matters because nothing else complains: labels sync, CI goes green, and the repo looks configured, but labelling an issue `agent-ready` will not start the agent. Add it with `gh secret set CLAUDE_CODE_OAUTH_TOKEN`, or at `Settings → Secrets and variables → Actions → Secrets`.
 
 **Step 4 — Install the Claude GitHub App**

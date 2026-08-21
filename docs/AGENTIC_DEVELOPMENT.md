@@ -76,6 +76,12 @@ That second part exists because the failure mode here is silence, and silence is
 
 Grant what your project needs in the `allow` list in `.github/actions/claude-run/action.yml`.
 
+**When the summary is not enough, there is a switch.** Set the repository variable `AGENT_DEBUG` to `true` and the next run streams Claude's full message history into the job log — every tool call and every result.
+
+Turn it off again afterwards, and read this before turning it on: those logs are visible to anyone who can see the repository, and the stream includes tool *results*. If a command touched a secret, an API key or customer data, it lands in the log. Use it on a non-sensitive repository, for one run, to answer a specific question.
+
+It exists because there is otherwise no way to see what a run actually did. GitHub's own debug logging does not reveal the SDK's output — that was tested, and the re-run returned nothing useful.
+
 **A cancelled run reports less.** A timeout is a cancellation, not a failure, and the agent is stopped part-way through writing its execution log. The summary will say the run ended before it reported. That absence is itself the signal: if the work looked close, raise `timeout-minutes`.
 
 ---
