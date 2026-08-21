@@ -24,7 +24,7 @@ jobs:
       github.event.issue.pull_request == null &&
       startsWith(github.event.comment.body, '/approve-plan')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
       contents: write
       pull-requests: write
@@ -35,6 +35,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The plan is committed to plan/issue-<N> and never merged, so a default
+          # checkout of the base branch has no docs/plans/ at all. Fetch everything
+          # so the plan branch is present locally.
+          fetch-depth: 0
 
       - name: Check commenter permissions
         id: permission-check
@@ -113,13 +118,33 @@ jobs:
         uses: anthropics/claude-code-action@239e3a730883eeb5c53db12b0fc9573b3024b126 # v1.0.191
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The permission mode has to be passed here. Setting
+          # permissions.defaultMode in `settings` below does NOT reach the SDK: a run
+          # so configured reports "permissionMode": "default", and in CI every Write
+          # blocks on an approval nobody can give. See the PR for the transcripts.
+          claude_args: --permission-mode acceptEdits
+          # Add your project's own test and lint commands to `allow` below —
+          # e.g. "Bash(npm *)", "Bash(php *)", "Bash(pytest *)". Without them the
+          # agent cannot verify its own work: it spends turns on commands that are
+          # refused, and a refusal reads to it like a broken environment rather than
+          # a policy decision.
           settings: |
             {
               "permissions": {
                 "defaultMode": "acceptEdits",
                 "allow": [
                   "Bash(git *)",
-                  "Bash(gh *)"
+                  "Bash(gh *)",
+                  "Bash(ls *)",
+                  "Bash(cat *)",
+                  "Bash(find *)",
+                  "Bash(xargs *)",
+                  "Bash(mkdir *)",
+                  "Bash(rm *)",
+                  "Bash(mv *)",
+                  "Bash(cp *)",
+                  "Bash(which *)",
+                  "Bash(curl *)"
                 ]
               }
             }
@@ -133,10 +158,17 @@ jobs:
             A human has approved the plan for this issue. Your job is to implement it.
 
             Instructions:
-            1. Find the plan file in docs/plans/ that corresponds to this issue
-               (look for a recent plan file — check file dates and titles)
-            2. If a plan file exists, invoke /ce-work with the plan file path as input
-            3. If no plan file exists, invoke /ce-work directly with the issue as context
+            1. The approved plan is on the branch plan/issue-${{ github.event.issue.number }},
+               which is NOT merged into this branch. Read it from there:
+                 git show origin/plan/issue-${{ github.event.issue.number }} --stat
+                 git checkout origin/plan/issue-${{ github.event.issue.number }} -- docs/plans/
+               If that branch does not exist, look for a recent file in docs/plans/ instead.
+            2. If a plan file exists, invoke /ce-work with the plan file path as input,
+               and carry the plan file itself into your branch so the reasoning ships
+               alongside the code
+            3. If no plan file exists, say so in a comment on the issue before you
+               implement anything — an approved plan that cannot be found is worth
+               reporting, not working around silently
             4. Implement the feature per the plan or issue
             5. Open a PR using the agent-generated PR template
             6. Add the 'agent-generated' label to the PR
@@ -145,6 +177,12 @@ jobs:
             - Stay within the issue's defined scope ("Out of scope" is a hard boundary)
             - Reference the issue number in the PR: "Closes #${{ github.event.issue.number }}"
             - If blocked or uncertain, comment on the issue asking for clarification
+
+            If this repository depends on code you cannot read from here — a private
+            dependency, an API you cannot reach — do NOT guess its contract. Implement
+            what you can, and state the unverified assumption plainly in the PR body (or
+            in the plan) so a reviewer can check it. A confident PR built on a guessed
+            interface passes review and fails in production.
 
           additional_permissions: |
             actions: read

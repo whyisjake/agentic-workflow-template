@@ -29,6 +29,22 @@ Set `AGENT_PROVIDER` in **Settings → Secrets and variables → Variables**. If
 
 ---
 
+## What the Agent Can and Cannot Do in CI
+
+Four constraints decide whether a run produces a pull request or nothing at all. The first is not optional.
+
+**The permission mode is passed through `claude_args`, not `settings`.** `claude-code-action` runs interactively by default: in CI every `Write` waits on an approval nobody can give, and the run either produces nothing or burns to its timeout. Setting `permissions.defaultMode` inside the `settings` input looks like the fix and is not — a run configured that way reports `"permissionMode": "default"` and still refuses every write. The workflows here pass `claude_args: --permission-mode acceptEdits`, which does reach the SDK.
+
+**The allow list must include your project's own tooling.** `allow` grants Bash patterns; anything outside it is refused. The shipped list covers git, gh and common file utilities, and it deliberately does not know how your project runs its tests. Add that — `Bash(npm *)`, `Bash(php *)`, `Bash(pytest *)`, whatever applies — or the agent cannot verify its own work before opening a PR, while the issue template's "Tests pass" criterion asks it to. Observed cost of getting this wrong: roughly six minutes of a fifteen-minute budget spent re-attempting commands that could never be allowed.
+
+**A refusal does not look like a policy decision to the agent.** Blocked commands come back as errors, and a model reasonably concludes the environment lacks the capability. In one run a blocked `curl` led the agent to state, in its PR body and in a committed fixture, that the environment had no network access — it had network; the command was not allowed. Anything you do not allow, expect to see described as impossible.
+
+**An agent cannot modify `.github/workflows/`.** The GitHub App token has no `workflows` permission, so a push touching a workflow file fails with `refusing to allow a GitHub App to create or update workflow ... without 'workflows' permission`. An agent that writes tests therefore cannot wire them into CI; it has to hand you the YAML and you paste it. Worth saying in the issue when the task involves CI.
+
+**Timeouts.** Jobs are capped at 30 minutes. A real feature on a small repo — three classes, two test files, iterating until the tests passed — took 20 minutes, so 15 was not enough. Raise it if your project's suite is slow; a stuck run with no cap consumes GitHub's 6-hour job limit.
+
+---
+
 ## The 5 Elements of an Agent-Ready Issue
 
 ### 1. Clear Summary (One Sentence)
