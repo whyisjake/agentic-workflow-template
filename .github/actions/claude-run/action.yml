@@ -70,12 +70,48 @@ runs:
         # what stopped this template opening a pull request at all.
         claude_args: --permission-mode acceptEdits
 
-        # Add your project's own test and lint commands to `allow` below —
-        # e.g. "Bash(npm test)", "Bash(vendor/bin/phpunit)", "Bash(pytest)".
-        # Without them the agent cannot verify its own work: it spends turns on
-        # commands that are refused, and a refusal reads to it like a broken
-        # environment rather than a policy decision. Observed: 9 permission
-        # denials on a run whose issue asked it to make tests pass.
+        # One comment, updated in place, rather than a stack. Without this a
+        # stale failure diagnosis stays the newest word on an issue forever —
+        # observed on a test repo, where "Agent setup incomplete: missing
+        # CLAUDE_CODE_OAUTH_TOKEN" was still the latest comment after the
+        # secret had been proven correct and a later run had succeeded.
+        use_sticky_comment: true
+
+        # Off unless AGENT_DEBUG is set to 'true' in repository variables.
+        #
+        # It is off by default for a reason worth reading before you flip it:
+        # this streams every Claude message, including tool execution results,
+        # into the job log. Those logs are visible to anyone who can see the
+        # repository. If a tool result touched a secret, an API key or customer
+        # data, it lands there.
+        #
+        # It exists because there is otherwise no way to see what a run did.
+        # GitHub's own debug logging does not reveal SDK output — that was
+        # tested, and the re-run returned nothing. Turn it on for one run in a
+        # non-sensitive repo, read the log, turn it off.
+        show_full_output: ${{ vars.AGENT_DEBUG == 'true' }}
+
+        # ADD YOUR PROJECT'S TEST AND LINT COMMANDS TO `allow` BELOW.
+        #
+        # This is not optional housekeeping. The shipped list contains no test
+        # runner, so out of the box the agent cannot execute the tests it
+        # writes. Measured across four real runs: 9, 10, 9 and 9 permission
+        # denials, every one of them the agent trying and failing to run a test
+        # suite that the issue template's "Tests pass" criterion asked it to.
+        #
+        # It reports that honestly rather than claiming the tests passed, which
+        # is the behaviour you want — but you are then reviewing unverified
+        # code. Grant what your project needs:
+        #
+        #   Node        "Bash(npm test)", "Bash(npm run lint)"
+        #   PHP         "Bash(vendor/bin/phpunit)", "Bash(composer test)"
+        #   Python      "Bash(pytest)", "Bash(python3 -m unittest *)"
+        #   Ruby        "Bash(bundle exec rspec)", "Bash(rake test)"
+        #   Go          "Bash(go test *)", "Bash(go vet *)"
+        #
+        # Prefer the narrowest pattern that works. A wildcard is a subcommand
+        # you have not thought about yet, and "Bash(php *)" is "php -r '<any
+        # code>'" — which scripts/validate-workflows.sh will reject.
         #
         # This list is NOT a sandbox. "Bash(git *)" and "Bash(gh *)" are
         # deliberate exceptions — the run cannot commit or open a pull request
@@ -101,6 +137,7 @@ runs:
                 "Bash(mv *)",
                 "Bash(cp *)",
                 "Bash(which *)",
+                "Bash(jq *)",
                 "Bash(bash scripts/validate-workflows.sh)"
               ],
               "deny": [
@@ -241,7 +278,27 @@ runs:
             'A run that changes nothing and reports success is the failure this template',
             'exists to prevent, so it is reported here rather than left silent.');
 
+          // Update our own previous report rather than stacking a new one.
+          // use_sticky_comment above governs the action's comments, not this
+          // one, and a stale "the agent produced nothing" sitting under a run
+          // that later succeeded is exactly the confusion it exists to avoid.
+          const MARKER = '<!-- agentic-workflow:run-report -->';
+          const body = [MARKER, ...lines].join('\n');
+
+          const { data: existing } = await github.rest.issues.listComments({
+            owner: context.repo.owner, repo: context.repo.repo,
+            issue_number: n, per_page: 100,
+          });
+          const mine = existing.find(c => c.body && c.body.includes(MARKER));
+
+          if (mine) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              comment_id: mine.id, body,
+            });
+            return;
+          }
           await github.rest.issues.createComment({
             owner: context.repo.owner, repo: context.repo.repo,
-            issue_number: n, body: lines.join('\n'),
+            issue_number: n, body,
           });
