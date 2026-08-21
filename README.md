@@ -30,6 +30,15 @@ bash <(curl -fsSL https://raw.githubusercontent.com/whyisjake/agentic-workflow-t
 
 This copies all workflow files, skips anything that already exists, and prints next steps. Nothing is committed — you review first.
 
+**Installing from a fork or a mirror** — the script prints which source it is using before it writes anything. To point it at a different copy, set `TEMPLATE_REPO_URL` to that copy's raw base URL:
+
+```bash
+TEMPLATE_REPO_URL=https://raw.githubusercontent.com/<owner>/<repo>/<ref> \
+  bash <(curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/<ref>/scripts/setup.sh)
+```
+
+If the copy you want is private or its host has no raw endpoint, clone it and run `scripts/setup.sh` from that clone — local mode reads the files off disk and never fetches over the network.
+
 ---
 
 **Step 1 — Enable the template flag** *(new repos only)*
