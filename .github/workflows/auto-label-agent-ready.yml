@@ -8,21 +8,11 @@
 # agent took the direct path on work that was meant to be planned first. It
 # spent 14 turns and produced nothing.
 #
-# It does NOT start the agent. A label applied by this workflow uses GITHUB_TOKEN,
-# and GitHub does not start workflow runs from events triggered by that token — so
-# agent-ready-trigger.yml never sees it. A human applies the label to start a run.
+# The check itself lives in .github/actions/screen-issue, because the trigger
+# uses the same one to refuse a malformed issue. One definition, two callers.
 #
-# It also does not judge content: the check below is structural, so a template with
-# every heading present and nothing filled in passes it.
-#
-# The auto-label runs a structural check only — it does not evaluate content quality.
-# A fully blank template (all headings present, no content filled in) will still pass.
-# The downstream agent prompt handles that case by commenting on the issue if it
-# lacks real content.
-#
-# CUSTOMIZATION: Edit the requiredSections array below to add or remove sections
-# that your team's issue template requires. The check looks for exact string matches
-# in the issue body.
+# It is structural: an issue with every heading and nothing written under them
+# passes. That is why the label it applies is a hint, not a trigger.
 
 name: Auto-Label Agent-Ready Issues
 
@@ -40,72 +30,36 @@ jobs:
       issues: write
 
     steps:
-      - name: Check issue structure and apply label
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Screen the issue
+        id: screen
+        uses: ./.github/actions/screen-issue
+        with:
+          issue_body: ${{ github.event.issue.body }}
+
+      - name: Apply agent-candidate
+        if: steps.screen.outputs.ready == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const issue = context.payload.issue;
-            const body = issue.body || '';
-
-            // Required sections for an agent-ready issue.
-            // Edit this list to match your team's issue template.
-            const requiredSections = [
-              '## Context',
-              '## Acceptance Criteria',
-              '## Scope',
-              '## Technical Notes'
-            ];
-
-            // The opening section is checked by shape, not by name. A hand-written
-            // issue that says "## What this is" instead of "## Summary" is not less
-            // ready than one that copied the template's headings, and exact-matching
-            // five literals rejected real issues over one word.
-            const hasOpeningSection = /^#{1,3} \S/m.test(body);
-
-            // Check if all required sections are present
-            const hasAllSections = hasOpeningSection && requiredSections.every(section =>
-              body.includes(section)
-            );
-
-            // Check if scope has both in/out defined
-            const hasInScope = body.includes('**In scope:**') || body.includes('In scope:');
-            const hasOutScope = body.includes('**Out of scope:**') || body.includes('Out of scope:');
-            const hasScopeBoundaries = hasInScope && hasOutScope;
-
-            // Check if acceptance criteria has at least one checkbox
-            const hasAcceptanceCriteria = /- \[[ x]\]/.test(body);
-
-            const currentLabels = issue.labels.map(l => l.name);
-            const hasAgentReadyLabel = currentLabels.includes('agent-candidate') || currentLabels.includes('agent-ready');
-
-            if (hasAllSections && hasScopeBoundaries && hasAcceptanceCriteria) {
-              if (!hasAgentReadyLabel) {
-                console.log('Issue looks agent-ready — applying agent-candidate for a human to confirm');
-                try {
-                  await github.rest.issues.addLabels({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: issue.number,
-                    labels: ['agent-candidate']
-                  });
-                } catch (err) {
-                  // Most likely cause: label does not exist in the repo yet.
-                  // Fix: run the Setup Labels workflow (Actions → Setup Labels → Run workflow).
-                  core.setFailed(`Failed to add agent-candidate label: ${err.message}. Ensure the label exists by running the Setup Labels workflow.`);
-                }
-              } else {
-                console.log('Issue already flagged — skipping');
-              }
-            } else {
-              // Log what's missing for debugging
-              console.log('Issue does not meet agent-ready criteria:');
-              console.log('  All required sections present:', hasAllSections);
-              if (!hasAllSections) {
-                console.log(`    ${hasOpeningSection ? '✓' : '✗'} an opening section (any heading)`);
-                requiredSections.forEach(s => {
-                  console.log(`    ${body.includes(s) ? '✓' : '✗'} ${s}`);
-                });
-              }
-              console.log('  Scope boundaries (in + out):', hasScopeBoundaries);
-              console.log('  Acceptance criteria checkbox:', hasAcceptanceCriteria);
+            const labels = context.payload.issue.labels.map(l => l.name);
+            if (labels.includes('agent-candidate') || labels.includes('agent-ready')) {
+              console.log('Already flagged or already approved — nothing to do.');
+              return;
+            }
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                labels: ['agent-candidate'],
+              });
+              console.log('Applied agent-candidate. A human applies agent-ready to start a run.');
+            } catch (err) {
+              // Most likely cause: the label does not exist in this repo yet.
+              core.setFailed(
+                `Failed to add agent-candidate: ${err.message}. ` +
+                'Run the Setup Labels workflow (Actions → Setup Labels → Run workflow).');
             }

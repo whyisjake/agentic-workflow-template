@@ -1,0 +1,70 @@
+name: "Screen an issue"
+description: >-
+  Structural check for whether an issue has the shape an agent can execute.
+  Returns a verdict and a list of what is missing. Never applies a label and
+  never starts anything.
+
+# Why this exists
+#
+# The same check lived in auto-label-agent-ready.yml and, in a richer form, in
+# issue-screener.yml — and the trigger had none at all, so applying agent-ready
+# to a half-written issue ran the agent on a bad brief with no warning.
+#
+# It is structural on purpose. It cannot tell whether the Acceptance Criteria
+# are any good, only that they exist. An issue with every heading and nothing
+# under them passes. That limitation is the reason the verdict is a hint for a
+# human to confirm, and never a trigger.
+
+inputs:
+  issue_body:
+    description: "The issue body to screen."
+    required: true
+
+outputs:
+  ready:
+    description: "'true' when the issue has the required shape."
+    value: ${{ steps.screen.outputs.ready }}
+  missing:
+    description: "Newline-separated list of what is missing. Empty when ready."
+    value: ${{ steps.screen.outputs.missing }}
+
+runs:
+  using: composite
+  steps:
+    - name: Screen
+      id: screen
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        ISSUE_BODY: ${{ inputs.issue_body }}
+      with:
+        script: |
+          const body = process.env.ISSUE_BODY || '';
+          const missing = [];
+
+          // The opening section is checked by shape, not by name. A hand-written
+          // issue that says "## What this is" instead of "## Summary" is not less
+          // ready than one that copied the template's headings, and exact-matching
+          // five literals rejected real issues over a single word.
+          if (!/^#{1,3} \S/m.test(body)) {
+            missing.push('an opening section (any heading)');
+          }
+
+          // Edit this list to match your team's issue template.
+          for (const section of ['## Context', '## Acceptance Criteria', '## Scope', '## Technical Notes']) {
+            if (!body.includes(section)) missing.push(section);
+          }
+
+          // Scope is only useful if it says what is out as well as in.
+          if (!/out of scope/i.test(body)) {
+            missing.push('an "Out of scope" boundary under ## Scope');
+          }
+
+          // At least one checkbox, so there is something to verify against.
+          if (!/^\s*[-*]\s*\[[ xX]\]/m.test(body)) {
+            missing.push('at least one acceptance-criteria checkbox');
+          }
+
+          const ready = missing.length === 0;
+          console.log(ready ? 'Structurally ready.' : `Missing:\n  ${missing.join('\n  ')}`);
+          core.setOutput('ready', ready ? 'true' : 'false');
+          core.setOutput('missing', missing.join('\n'));

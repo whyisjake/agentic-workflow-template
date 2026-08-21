@@ -27,6 +27,7 @@
 #   - Adds .github/agents/issue-screener.agent.md
 #   - Adds scripts/validate-workflows.sh  (the workflow YAML + permission guard)
 #   - Adds .github/actions/claude-run/       (the shared agent invocation)
+#   - Adds .github/actions/screen-issue/     (the shared issue structure check)
 #   - Creates docs/ if it doesn't exist
 #   - Sets the AGENT_PROVIDER repository variable, and reports on the secret
 #   - Prints next steps
@@ -203,12 +204,14 @@ fi
 # startup — so this is not optional and is installed even if it already exists
 # in some other form.
 
-if [[ -f ".github/actions/claude-run/action.yml" ]]; then
-  yellow "  skipped (already exists): .github/actions/claude-run/action.yml"
-else
-  fetch ".github/actions/claude-run/action.yml" ".github/actions/claude-run/action.yml"
-  green "  added: .github/actions/claude-run/action.yml"
-fi
+for action in claude-run screen-issue; do
+  if [[ -f ".github/actions/$action/action.yml" ]]; then
+    yellow "  skipped (already exists): .github/actions/$action/action.yml"
+  else
+    fetch ".github/actions/$action/action.yml" ".github/actions/$action/action.yml"
+    green "  added: .github/actions/$action/action.yml"
+  fi
+done
 
 # ── Scripts ───────────────────────────────────────────────────────────────────
 # validate-workflows.sh installs alongside the workflows because both halves of

@@ -152,6 +152,47 @@ jobs:
         if: steps.labels.outputs.ready != 'true'
         run: echo "Not labelled agent-ready — nothing to do."
 
+      # Applying agent-ready to a half-written issue used to run the agent
+      # anyway. It would spend turns and money on a brief with no acceptance
+      # criteria, then produce something nobody asked for. Refusing costs
+      # seconds and says what is missing.
+      #
+      # This is structural only: it cannot judge whether the criteria are any
+      # good, only that they are there.
+      - name: Screen the issue before spending anything
+        id: screen
+        if: steps.actor.outputs.allowed == 'true' && steps.labels.outputs.ready == 'true'
+        uses: ./.github/actions/screen-issue
+        with:
+          issue_body: ${{ github.event.issue.body }}
+
+      - name: Refuse a malformed issue
+        if: steps.screen.outputs.ready == 'false'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const missing = `${{ steps.screen.outputs.missing }}`.split('\n').filter(Boolean);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: [
+                '### Not started — this issue is missing some structure',
+                '',
+                'The agent was not run. These are missing:',
+                '',
+                ...missing.map(m => `- ${m}`),
+                '',
+                'Add them and re-apply `agent-ready` to start. Removing and re-adding the',
+                'label is what fires the trigger — re-applying a label that is already there',
+                'emits no event.',
+                '',
+                'This check is structural: it confirms the sections exist, not that they say',
+                'anything useful. It is here so the agent does not spend turns on a brief',
+                'that cannot be executed.'
+              ].join('\n')
+            });
+
       # plan-approval-gate.yml has had this check since it was written; the
       # direct path never did, and no PR in the current batch adds one. Without
       # it, removing and re-applying the label starts a second full run and opens
@@ -186,7 +227,7 @@ jobs:
       # ── HIGH COMPLEXITY: plan first, then gate on /approve-plan ──────────────
       - name: Run Claude Code — Planning Phase (complexity:high)
         id: claude-plan
-        if: steps.actor.outputs.allowed == 'true' && steps.labels.outputs.ready == 'true' && steps.pr-check.outputs.already_running == 'false' && steps.labels.outputs.is_high == 'true'
+        if: steps.actor.outputs.allowed == 'true' && steps.labels.outputs.ready == 'true' && steps.pr-check.outputs.already_running == 'false' && steps.screen.outputs.ready == 'true' && steps.labels.outputs.is_high == 'true'
         uses: ./.github/actions/claude-run
         with:
           oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -252,7 +293,7 @@ jobs:
             bug that passes review.
       - name: Run Claude Code — Direct Execution (complexity:low/medium)
         id: claude-work
-        if: steps.actor.outputs.allowed == 'true' && steps.labels.outputs.ready == 'true' && steps.pr-check.outputs.already_running == 'false' && steps.labels.outputs.is_high == 'false'
+        if: steps.actor.outputs.allowed == 'true' && steps.labels.outputs.ready == 'true' && steps.pr-check.outputs.already_running == 'false' && steps.screen.outputs.ready == 'true' && steps.labels.outputs.is_high == 'false'
         uses: ./.github/actions/claude-run
         with:
           oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
