@@ -187,7 +187,7 @@ jobs:
       - name: Run Claude Code — Planning Phase (complexity:high)
         id: claude-plan
         if: steps.actor.outputs.allowed == 'true' && steps.labels.outputs.ready == 'true' && steps.pr-check.outputs.already_running == 'false' && steps.labels.outputs.is_high == 'true'
-        uses: anthropics/claude-code-action@239e3a730883eeb5c53db12b0fc9573b3024b126 # v1.0.191
+        uses: anthropics/claude-code-action@d40ddef4c030e508327d6e35a9c45f3368482c50 # v1.0.195
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # The permission mode has to be passed here. Setting
@@ -292,7 +292,7 @@ jobs:
       - name: Run Claude Code — Direct Execution (complexity:low/medium)
         id: claude-work
         if: steps.actor.outputs.allowed == 'true' && steps.labels.outputs.ready == 'true' && steps.pr-check.outputs.already_running == 'false' && steps.labels.outputs.is_high == 'false'
-        uses: anthropics/claude-code-action@239e3a730883eeb5c53db12b0fc9573b3024b126 # v1.0.191
+        uses: anthropics/claude-code-action@d40ddef4c030e508327d6e35a9c45f3368482c50 # v1.0.195
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # The permission mode has to be passed here. Setting
