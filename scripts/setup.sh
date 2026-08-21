@@ -232,10 +232,10 @@ else
   if [[ -z "$provider" ]]; then
     if [[ -t 0 ]]; then
       echo "  Which agent should run agent-ready issues?"
-      echo "    1) claude        — full support"
-      echo "    2) openai-codex  — stub, you extend it"
-      echo "    3) copilot       — stub, you extend it"
-      echo "    4) custom        — repository_dispatch to your own listener"
+      echo "    1) claude        — the only provider implemented in Beta"
+      echo "    2) openai-codex  — NOT IMPLEMENTED: a stub you must write yourself"
+      echo "    3) copilot       — NOT IMPLEMENTED: a stub you must write yourself"
+      echo "    4) custom        — repository_dispatch only; you write the listener"
       choice=""
       read -r -p "  Choice [1]: " choice || true
       case "${choice:-1}" in
@@ -282,9 +282,31 @@ else
     echo "    AGENT_PROVIDER = $provider"
   fi
 
+  # Say plainly when the chosen provider does not do anything yet.
+  #
+  # Only the claude path is implemented. The other three are stub jobs that echo
+  # a message and exit, so a repo configured for one of them installs cleanly,
+  # syncs its labels, goes green, and then silently produces nothing the first
+  # time someone labels an issue — the same silent failure this template is
+  # meant to stop. Saying so here is the only place a customer finds out before
+  # they are waiting on a PR that is never coming.
+  if [[ "$provider" != "claude" ]]; then
+    echo ""
+    red   "  '$provider' is not implemented in this release."
+    echo  "  Its job in .github/workflows/agent-ready-trigger.yml is a stub: it echoes a"
+    echo  "  message and exits without running an agent or opening a pull request."
+    echo  "  Labelling an issue agent-ready under this provider will do nothing until you"
+    echo  "  write that job yourself."
+    echo  "  For a working agent, re-run with: AGENT_PROVIDER=claude bash scripts/setup.sh"
+    echo ""
+    PROVIDER_NEXT_STEP="Provider is $provider, which is a stub — implement its job in agent-ready-trigger.yml, or switch to claude."
+  fi
+
   # Report on the secret. Never set it.
   secret="$(secret_for_provider "$provider")"
-  if [[ -z "$secret" ]]; then
+  if [[ "$provider" != "claude" ]]; then
+    dim "  Not checking for a provider secret — the stub never reads one."
+  elif [[ -z "$secret" ]]; then
     dim "  Provider '$provider' has no single required secret — its credentials are yours to wire up."
     PROVIDER_NEXT_STEP="Provider is $provider — wire up its credentials and listener yourself."
   else
