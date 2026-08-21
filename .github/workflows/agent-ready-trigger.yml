@@ -187,75 +187,9 @@ jobs:
       - name: Run Claude Code — Planning Phase (complexity:high)
         id: claude-plan
         if: steps.actor.outputs.allowed == 'true' && steps.labels.outputs.ready == 'true' && steps.pr-check.outputs.already_running == 'false' && steps.labels.outputs.is_high == 'true'
-        uses: anthropics/claude-code-action@239e3a730883eeb5c53db12b0fc9573b3024b126 # v1.0.191
+        uses: ./.github/actions/claude-run
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # The permission mode has to be passed here. Setting
-          # permissions.defaultMode in `settings` below does NOT reach the SDK: a run
-          # so configured reports "permissionMode": "default", and in CI every Write
-          # blocks on an approval nobody can give. See the PR for the transcripts.
-          claude_args: --permission-mode acceptEdits
-          # Add your project's own test and lint commands to `allow` below —
-          # e.g. "Bash(npm test)", "Bash(vendor/bin/phpunit)", "Bash(pytest)".
-          # Prefer the narrowest pattern that works: a wildcard is a subcommand you
-          # have not thought about yet, and "Bash(php *)" is "php -r '<any code>'".
-          # Without them the
-          # agent cannot verify its own work: it spends turns on commands that are
-          # refused, and a refusal reads to it like a broken environment rather than
-          # a policy decision.
-          #
-          # What this list is, and what it is not.
-          #
-          # The issue body is untrusted input that reaches the model as
-          # instructions, and the run holds a write-scoped token with edits
-          # pre-approved. So every entry here is reachable by whoever can get an
-          # issue labelled.
-          #
-          # This list is NOT a sandbox, and you should not treat it as one.
-          # "Bash(git *)" and "Bash(gh *)" are deliberate exceptions — the run
-          # cannot commit or open a pull request without them — and both permit
-          # far more than that: `git -c core.pager=...` and `git -c alias.x='!...'`
-          # run arbitrary programs, and `git push <url>` and `gh gist create` send
-          # data off the runner. The `deny` list below closes the escapes we know
-          # about; it does not make the allow list airtight.
-          #
-          # The real boundary is upstream: who can cause a run to start. Keep the
-          # trigger gated on a labelling actor with write access, and treat any
-          # agent run as capable of whatever the workflow token can do.
-          #
-          # When you widen this list, narrow patterns are still worth preferring:
-          # "Bash(npm test)" beats "Bash(npm *)".
-          settings: |
-            {
-              "permissions": {
-                "defaultMode": "acceptEdits",
-                "allow": [
-                  "Bash(git *)",
-                  "Bash(gh *)",
-                  "Bash(ls *)",
-                  "Bash(cat *)",
-                  "Bash(mkdir *)",
-                  "Bash(rm *)",
-                  "Bash(mv *)",
-                  "Bash(cp *)",
-                  "Bash(which *)",
-                  "Bash(bash scripts/validate-workflows.sh)"
-                ],
-                "deny": [
-                  "Bash(git -c *)",
-                  "Bash(git config *)",
-                  "Bash(git remote *)",
-                  "Bash(gh api *)",
-                  "Bash(gh gist *)",
-                  "Bash(gh alias *)",
-                  "Bash(gh extension *)"
-                ]
-              }
-            }
-          # Uncomment to stream the full SDK output into the job log for debugging:
-          # show_full_output: true
-          additional_permissions: |
-            actions: read
+          oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             You are planning the implementation for issue #${{ github.event.issue.number }}.
 
@@ -314,80 +248,12 @@ jobs:
             do instead if the assumption turns out to be wrong. An unverifiable interface
             named in a plan is a question a reviewer can answer; guessed in code it is a
             bug that passes review.
-
-      # ── LOW/MEDIUM COMPLEXITY: execute directly ──────────────────────────────
       - name: Run Claude Code — Direct Execution (complexity:low/medium)
         id: claude-work
         if: steps.actor.outputs.allowed == 'true' && steps.labels.outputs.ready == 'true' && steps.pr-check.outputs.already_running == 'false' && steps.labels.outputs.is_high == 'false'
-        uses: anthropics/claude-code-action@239e3a730883eeb5c53db12b0fc9573b3024b126 # v1.0.191
+        uses: ./.github/actions/claude-run
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # The permission mode has to be passed here. Setting
-          # permissions.defaultMode in `settings` below does NOT reach the SDK: a run
-          # so configured reports "permissionMode": "default", and in CI every Write
-          # blocks on an approval nobody can give. See the PR for the transcripts.
-          claude_args: --permission-mode acceptEdits
-          # Add your project's own test and lint commands to `allow` below —
-          # e.g. "Bash(npm test)", "Bash(vendor/bin/phpunit)", "Bash(pytest)".
-          # Prefer the narrowest pattern that works: a wildcard is a subcommand you
-          # have not thought about yet, and "Bash(php *)" is "php -r '<any code>'".
-          # Without them the
-          # agent cannot verify its own work: it spends turns on commands that are
-          # refused, and a refusal reads to it like a broken environment rather than
-          # a policy decision.
-          #
-          # What this list is, and what it is not.
-          #
-          # The issue body is untrusted input that reaches the model as
-          # instructions, and the run holds a write-scoped token with edits
-          # pre-approved. So every entry here is reachable by whoever can get an
-          # issue labelled.
-          #
-          # This list is NOT a sandbox, and you should not treat it as one.
-          # "Bash(git *)" and "Bash(gh *)" are deliberate exceptions — the run
-          # cannot commit or open a pull request without them — and both permit
-          # far more than that: `git -c core.pager=...` and `git -c alias.x='!...'`
-          # run arbitrary programs, and `git push <url>` and `gh gist create` send
-          # data off the runner. The `deny` list below closes the escapes we know
-          # about; it does not make the allow list airtight.
-          #
-          # The real boundary is upstream: who can cause a run to start. Keep the
-          # trigger gated on a labelling actor with write access, and treat any
-          # agent run as capable of whatever the workflow token can do.
-          #
-          # When you widen this list, narrow patterns are still worth preferring:
-          # "Bash(npm test)" beats "Bash(npm *)".
-          settings: |
-            {
-              "permissions": {
-                "defaultMode": "acceptEdits",
-                "allow": [
-                  "Bash(git *)",
-                  "Bash(gh *)",
-                  "Bash(ls *)",
-                  "Bash(cat *)",
-                  "Bash(mkdir *)",
-                  "Bash(rm *)",
-                  "Bash(mv *)",
-                  "Bash(cp *)",
-                  "Bash(which *)",
-                  "Bash(bash scripts/validate-workflows.sh)"
-                ],
-                "deny": [
-                  "Bash(git -c *)",
-                  "Bash(git config *)",
-                  "Bash(git remote *)",
-                  "Bash(gh api *)",
-                  "Bash(gh gist *)",
-                  "Bash(gh alias *)",
-                  "Bash(gh extension *)"
-                ]
-              }
-            }
-          # Uncomment to stream the full SDK output into the job log for debugging:
-          # show_full_output: true
-          additional_permissions: |
-            actions: read
+          oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             You are implementing issue #${{ github.event.issue.number }}.
 
@@ -445,16 +311,6 @@ jobs:
             what you can, and state the unverified assumption plainly in the PR body (or
             in the plan) so a reviewer can check it. A confident PR built on a guessed
             interface passes review and fails in production.
-
-      # Names what could be wrong and points at the log, rather than asserting a
-      # cause it cannot know. Observed 21 August: the old text blamed a missing
-      # CLAUDE_CODE_OAUTH_TOKEN on a repository where the secret was correctly
-      # set — and posted that twice — sending the reader to the one place they
-      # did not need to look.
-      #
-      # cancelled() is in the gate because a timeout is a cancellation, not a
-      # failure. Without it the reporter is skipped and the issue is told nothing
-      # at all, which is the worst outcome of the three.
       - name: Report agent failure
         if: failure() || cancelled()
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
