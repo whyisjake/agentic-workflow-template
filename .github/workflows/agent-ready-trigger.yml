@@ -298,9 +298,11 @@ jobs:
       github.event.label.name == 'agent-ready' &&
       vars.AGENT_PROVIDER == 'openai-codex'
     runs-on: ubuntu-latest
+    # Only what a stub needs. Raise contents/pull-requests to write when you
+    # implement the job below - and note ISSUE_BODY is untrusted input that will
+    # reach your agent as instructions.
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
       issues: write
 
     steps:
@@ -329,6 +331,33 @@ jobs:
           echo "OpenAI Codex provider stub — configure this step for your setup"
           echo "Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
 
+      - name: Report that this provider is not implemented
+        if: always()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: [
+                '### No pull request will be opened',
+                '',
+                '`AGENT_PROVIDER` is set to `openai-codex`, which is not implemented in this',
+                'template. The `trigger-openai-codex` job is a stub: it does not run an agent.',
+                '',
+                'Two ways forward:',
+                '',
+                '- Implement `trigger-openai-codex` in `.github/workflows/agent-ready-trigger.yml`.',
+                '- Or set `AGENT_PROVIDER` to `claude`, the one provider implemented today.',
+                '',
+                'This run is marked failed on purpose. A run that produces nothing should not',
+                'report success \u2014 that is how a repository looks configured while the agent',
+                'silently never fires.'
+              ].join('\n')
+            });
+            core.setFailed('AGENT_PROVIDER=openai-codex is a stub; no agent ran and no PR was opened.');
+
   # ─────────────────────────────────────────────────────────────────────────────
   # GITHUB COPILOT via gh-aw (stub)
   # TODO: extend this job for your gh-aw setup.
@@ -339,9 +368,10 @@ jobs:
       github.event.label.name == 'agent-ready' &&
       vars.AGENT_PROVIDER == 'copilot'
     runs-on: ubuntu-latest
+    # Only what a stub needs. Raise contents/pull-requests to write when you
+    # implement the job below.
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
       issues: write
 
     steps:
@@ -365,6 +395,33 @@ jobs:
           echo "GitHub Copilot (gh-aw) provider stub — configure this step for your setup"
           echo "Issue #${ISSUE_NUMBER}"
 
+      - name: Report that this provider is not implemented
+        if: always()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: [
+                '### No pull request will be opened',
+                '',
+                '`AGENT_PROVIDER` is set to `copilot`, which is not implemented in this',
+                'template. The `trigger-copilot` job is a stub: it does not run an agent.',
+                '',
+                'Two ways forward:',
+                '',
+                '- Implement `trigger-copilot` in `.github/workflows/agent-ready-trigger.yml`.',
+                '- Or set `AGENT_PROVIDER` to `claude`, the one provider implemented today.',
+                '',
+                'This run is marked failed on purpose. A run that produces nothing should not',
+                'report success \u2014 that is how a repository looks configured while the agent',
+                'silently never fires.'
+              ].join('\n')
+            });
+            core.setFailed('AGENT_PROVIDER=copilot is a stub; no agent ran and no PR was opened.');
+
   # ─────────────────────────────────────────────────────────────────────────────
   # CUSTOM — repository_dispatch
   # Emits an event that a listener workflow in this repo can consume.
@@ -379,6 +436,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      issues: write
 
     steps:
       - name: Dispatch agent-ready event
@@ -398,3 +456,26 @@ jobs:
               }
             });
             console.log(`Dispatched agent-ready event for issue #${context.payload.issue.number}`);
+
+      # A dispatch with no listener is indistinguishable from a working setup:
+      # the job goes green and the issue stays silent. Say what happened, so the
+      # absence of a follow-up reads as "my listener did not run" rather than
+      # "the agent ignored me".
+      - name: Say that the event was dispatched
+        if: success()
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: [
+                'Dispatched a `repository_dispatch` event of type `agent-ready` for this issue.',
+                '',
+                'This template does not implement the agent for `AGENT_PROVIDER=custom` \u2014 it',
+                'hands off. If nothing happens next, the listener workflow in this repository',
+                'is missing or did not match; `repository_dispatch` is not cross-repo, so the',
+                'listener has to live here.'
+              ].join('\n')
+            });
