@@ -76,6 +76,8 @@ Use the **Agent-Ready Task** issue template. Fill in all sections, add a `comple
 
 The auto-labeler cannot start it for you. It applies `agent-ready` to issues that have the right shape, but a label applied by a workflow uses `GITHUB_TOKEN`, and GitHub does not start workflow runs from events triggered by that token. Treat its label as a review hint, not a trigger.
 
+**Only a collaborator with write access can start a run.** The trigger checks who applied the label and stops if they do not have it. This is the security boundary that matters: an agent run holds a write-scoped token and takes the issue body as instructions, so anyone who can start one can direct it. Someone without write access can still open and describe an issue — they just cannot fire the agent themselves.
+
 Add the complexity label **before** `agent-ready`. The trigger reads the issue's labels from the API rather than from the event, so order no longer decides routing — but an issue that reaches the agent with no complexity label takes the direct path, and a `complexity:high` issue is meant to plan first.
 
 ---
