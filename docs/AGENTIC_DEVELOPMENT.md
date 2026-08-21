@@ -20,9 +20,9 @@ This guide teaches you how to write issues that agents can actually execute, how
 
 | Provider | AGENT_PROVIDER value | Required secret | Notes |
 |----------|---------------------|-----------------|-------|
-| Claude + Compound Engineering | `claude` (default) | `CLAUDE_CODE_OAUTH_TOKEN` | Full support — complexity-aware, planning phase for high complexity |
-| OpenAI Codex | `openai-codex` | `OPENAI_API_KEY` | Stub — configure the `trigger-openai-codex` job |
-| GitHub Copilot (gh-aw) | `copilot` | _(gh-aw setup)_ | Stub — configure the `trigger-copilot` job |
+| Claude + Compound Engineering | `claude` (default) | `CLAUDE_CODE_OAUTH_TOKEN` | Implemented — complexity-aware, planning phase for high complexity |
+| OpenAI Codex | `openai-codex` | `OPENAI_API_KEY`, once you write the job | **Not implemented** — `trigger-openai-codex` echoes and exits |
+| GitHub Copilot (gh-aw) | `copilot` | _(gh-aw setup)_ | **Not implemented** — `trigger-copilot` echoes and exits |
 | Custom / bring-your-own | `custom` | _(your own)_ | Dispatches `repository_dispatch` event; add your listener |
 
 Set `AGENT_PROVIDER` in **Settings → Secrets and variables → Variables**. If not set, the workflow defaults to `claude`.
@@ -31,13 +31,24 @@ Set `AGENT_PROVIDER` in **Settings → Secrets and variables → Variables**. If
 
 ## What the Agent Can and Cannot Do in CI
 
-Four constraints decide whether a run produces a pull request or nothing at all. The first is not optional.
+Five constraints decide whether a run produces a pull request or nothing at all. The first is not optional, and the second is a security boundary.
 
 **The permission mode is passed through `claude_args`, not `settings`.** `claude-code-action` runs interactively by default: in CI every `Write` waits on an approval nobody can give, and the run either produces nothing or burns to its timeout. Setting `permissions.defaultMode` inside the `settings` input looks like the fix and is not — a run configured that way reports `"permissionMode": "default"` and still refuses every write. The workflows here pass `claude_args: --permission-mode acceptEdits`, which does reach the SDK.
 
-**The allow list must include your project's own tooling.** `allow` grants Bash patterns; anything outside it is refused. The shipped list covers git, gh and common file utilities, and it deliberately does not know how your project runs its tests. Add that — `Bash(npm *)`, `Bash(php *)`, `Bash(pytest *)`, whatever applies — or the agent cannot verify its own work before opening a PR, while the issue template's "Tests pass" criterion asks it to. Observed cost of getting this wrong: roughly six minutes of a fifteen-minute budget spent re-attempting commands that could never be allowed.
+**The allow list bounds convenience, not capability — and you will need to widen it.** `allow` grants Bash patterns; anything outside it is refused. The shipped list covers git, gh, and basic file utilities including `rm`, `mv` and `cp`. It is not read-only, and it deliberately does not know how your project runs its tests. Add that — `Bash(npm test)`, `Bash(vendor/bin/phpunit)`, `Bash(pytest)`, whatever applies — or the agent cannot verify its own work before opening a PR, while the issue template's "Tests pass" criterion asks it to. Observed cost of getting this wrong: roughly six minutes of a fifteen-minute budget spent re-attempting commands that could never be allowed.
 
-**A refusal does not look like a policy decision to the agent.** Blocked commands come back as errors, and a model reasonably concludes the environment lacks the capability. In one run a blocked `curl` led the agent to state, in its PR body and in a committed fixture, that the environment had no network access — it had network; the command was not allowed. Anything you do not allow, expect to see described as impossible.
+Widen it deliberately, because of who is on the other end. **The issue body is untrusted input that reaches the model as instructions**, and the run carries `contents: write`, `pull-requests: write` and `issues: write` with writes pre-approved by `acceptEdits`. Whoever can get an issue labelled can therefore reach every command in this list. Two categories are worth refusing outright:
+
+- **Anything that runs an arbitrary program.** `Bash(find *)` executes anything through `-exec`; `Bash(xargs *)` does the same through `sh -c`; `Bash(php *)` is `php -r '<any code>'`. Any one of them makes the rest of the list decorative.
+- **Anything that reaches the network.** `Bash(curl *)` and `Bash(wget *)` are outbound egress to any host — the step that turns "read the checkout" into "send the checkout somewhere".
+
+**Two entries break both rules on purpose, and you cannot remove them.** `Bash(git *)` and `Bash(gh *)` are what let the agent commit and open a pull request at all. They also permit exactly what the rules above forbid: `git -c core.pager='sh -c ...'` and `git -c alias.x='!...'` run arbitrary programs, while `git push <url>` and `gh gist create` send data off the runner. The shipped `deny` list closes the escapes we know about — `git -c`, `git config`, `git remote`, `gh api`, `gh gist`, `gh alias`, `gh extension` — but a denylist is not a proof, and you should not read it as one.
+
+So do not tell yourself the runner is sandboxed or network-isolated. **The real boundary is upstream: who can cause a run to start.** Keep the trigger gated on a labelling actor with write access, and treat any agent run as capable of whatever its token can do. The allow list is defence in depth behind that gate, not a substitute for it.
+
+Within that, prefer the narrowest pattern that does the job: `Bash(npm test)` over `Bash(npm *)`, `Bash(composer install)` over `Bash(composer *)`. A wildcard is a subcommand you have not thought about yet.
+
+**A refusal does not look like a policy decision to the agent.** This is the cost of the boundary above, and it is worth paying. Blocked commands come back as errors, and a model reasonably concludes the environment lacks the capability. In one run a blocked `curl` led the agent to state, in its PR body and in a committed fixture, that the environment had no network access — it had network; the command was not allowed. Anything you do not allow, expect to see described as impossible.
 
 **An agent cannot modify `.github/workflows/`.** The GitHub App token has no `workflows` permission, so a push touching a workflow file fails with `refusing to allow a GitHub App to create or update workflow ... without 'workflows' permission`. An agent that writes tests therefore cannot wire them into CI; it has to hand you the YAML and you paste it. Worth saying in the issue when the task involves CI.
 
