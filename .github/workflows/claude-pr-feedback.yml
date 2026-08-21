@@ -33,6 +33,18 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# One run per pull request. agent-ready-trigger.yml got this and this file did
+# not, which is the same oversight in a different place: a reviewer who leaves
+# two @claude comments in quick succession, or comments while a run is already
+# working, starts a second agent on the same branch. Two agents pushing to one
+# branch is a worse outcome than waiting.
+#
+# cancel-in-progress is false for the same reason as the trigger: cancelling an
+# agent mid-write loses the work and reports nothing useful.
+concurrency:
+  group: claude-pr-feedback-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
 jobs:
   claude-pr-feedback:
     # Only for the claude provider, only on PR comments/reviews that mention @claude.

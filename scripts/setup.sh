@@ -176,6 +176,7 @@ WORKFLOW_FILES=(
   ".github/workflows/auto-label-agent-ready.yml"
   ".github/workflows/issue-screener.yml"
   ".github/workflows/validate-workflows.yml"
+  ".github/workflows/claude-pr-feedback.yml"
 )
 
 for file in "${WORKFLOW_FILES[@]}"; do
