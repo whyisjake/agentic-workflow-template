@@ -35,6 +35,19 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# One run per issue. Observed on 21 August: three runs started concurrently on a
+# single issue when its labels arrived close together, and the existing-PR check
+# stopped none of them — at that moment none had opened a PR yet, so each saw a
+# clear field. That check guards against duplicate pull requests; this guards
+# against duplicate runs, and they are different problems.
+#
+# cancel-in-progress is false on purpose. An agent run that is partway through
+# writing files and is then cancelled leaves nothing behind and reports nothing
+# useful; queuing costs a few minutes and keeps whatever the first run produced.
+concurrency:
+  group: agent-ready-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   # CLAUDE (default)
@@ -49,7 +62,20 @@ jobs:
   # not available on a GitHub runner.
   # ─────────────────────────────────────────────────────────────────────────────
   trigger-claude:
-    if: vars.AGENT_PROVIDER == 'claude' || vars.AGENT_PROVIDER == ''
+    # Two conditions, and both are load-bearing.
+    #
+    # The event's own label must be agent-ready. Without this, adding any other
+    # label to an already-agent-ready issue starts a run — observed live when a
+    # complexity label and agent-ready arrived seconds apart and produced two
+    # runs on one issue.
+    #
+    # The full label set still comes from the API further down, because a
+    # `labeled` event carries one label and routing needs to know about
+    # complexity. Reading the set is what #16 fixed; gating on the event is what
+    # it removed and should not have.
+    if: |
+      github.event.label.name == 'agent-ready' &&
+      (vars.AGENT_PROVIDER == 'claude' || vars.AGENT_PROVIDER == '')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

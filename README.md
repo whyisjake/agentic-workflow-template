@@ -9,7 +9,7 @@ Built on the workflow developed at [Pew Research Center](https://pewresearch.org
 ## How It Works
 
 1. A developer opens an issue using the **Agent-Ready template**
-2. When the issue has all the required sections, the auto-labeler flags it `agent-ready` — a hint that it looks ready, not a trigger
+2. When the issue has all the required sections, the auto-labeler flags it `agent-candidate` — a hint that it looks ready
 3. A human adds `agent-ready` (or re-applies it), and the trigger workflow routes to your configured AI agent
 4. The agent implements the feature and opens a PR
 5. A human reviews and merges
@@ -74,11 +74,11 @@ If `AGENT_PROVIDER` is not set, the workflow defaults to `claude`.
 
 Use the **Agent-Ready Task** issue template. Fill in all sections, add a `complexity:` label, then **add `agent-ready` yourself** — that label is what starts the agent.
 
-The auto-labeler cannot start it for you. It applies `agent-ready` to issues that have the right shape, but a label applied by a workflow uses `GITHUB_TOKEN`, and GitHub does not start workflow runs from events triggered by that token. Treat its label as a review hint, not a trigger.
+The auto-labeler does not apply `agent-ready` and cannot start a run. It applies `agent-candidate` to issues that have the right shape — a review hint. Only `agent-ready`, applied by a person, starts the agent.
 
 **Only a collaborator with write access can start a run.** The trigger checks who applied the label and stops if they do not have it. This is the security boundary that matters: an agent run holds a write-scoped token and takes the issue body as instructions, so anyone who can start one can direct it. Someone without write access can still open and describe an issue — they just cannot fire the agent themselves.
 
-Add the complexity label **before** `agent-ready`. The trigger reads the issue's labels from the API rather than from the event, so order no longer decides routing — but an issue that reaches the agent with no complexity label takes the direct path, and a `complexity:high` issue is meant to plan first.
+Add the complexity label **before** `agent-ready`, and this order matters. Only the `agent-ready` label starts a run, and the trigger then reads the issue's full label set from the API — so a `complexity:high` issue that gains its complexity label *after* `agent-ready` has already fired will have taken the direct path and skipped planning.
 
 ---
 

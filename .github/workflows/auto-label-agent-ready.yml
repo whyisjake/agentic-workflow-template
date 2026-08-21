@@ -1,5 +1,12 @@
-# Automatically adds 'agent-ready' label to issues that have all required sections.
-# This identifies issues that have the shape of an agent-ready issue.
+# Flags issues that have the shape of an agent-ready issue, by applying
+# 'agent-candidate'. It NEVER applies 'agent-ready' — that decision belongs to a
+# human, and it is the label that starts a paid agent run.
+#
+# This matches what issue-screener.yml already says in its own header. The two
+# workflows disagreed until 21 August, when this one applied 'agent-ready' to a
+# freshly-opened issue that had no complexity label yet, a run started, and the
+# agent took the direct path on work that was meant to be planned first. It
+# spent 14 turns and produced nothing.
 #
 # It does NOT start the agent. A label applied by this workflow uses GITHUB_TOKEN,
 # and GitHub does not start workflow runs from events triggered by that token — so
@@ -69,25 +76,25 @@ jobs:
             const hasAcceptanceCriteria = /- \[[ x]\]/.test(body);
 
             const currentLabels = issue.labels.map(l => l.name);
-            const hasAgentReadyLabel = currentLabels.includes('agent-ready');
+            const hasAgentReadyLabel = currentLabels.includes('agent-candidate') || currentLabels.includes('agent-ready');
 
             if (hasAllSections && hasScopeBoundaries && hasAcceptanceCriteria) {
               if (!hasAgentReadyLabel) {
-                console.log('Issue meets agent-ready criteria, adding label');
+                console.log('Issue looks agent-ready — applying agent-candidate for a human to confirm');
                 try {
                   await github.rest.issues.addLabels({
                     owner: context.repo.owner,
                     repo: context.repo.repo,
                     issue_number: issue.number,
-                    labels: ['agent-ready']
+                    labels: ['agent-candidate']
                   });
                 } catch (err) {
                   // Most likely cause: label does not exist in the repo yet.
                   // Fix: run the Setup Labels workflow (Actions → Setup Labels → Run workflow).
-                  core.setFailed(`Failed to add agent-ready label: ${err.message}. Ensure the label exists by running the Setup Labels workflow.`);
+                  core.setFailed(`Failed to add agent-candidate label: ${err.message}. Ensure the label exists by running the Setup Labels workflow.`);
                 }
               } else {
-                console.log('Issue already has agent-ready label — skipping');
+                console.log('Issue already flagged — skipping');
               }
             } else {
               // Log what's missing for debugging
