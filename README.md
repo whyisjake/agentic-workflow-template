@@ -57,12 +57,12 @@ Actions → Setup Labels → Run workflow
 
 `scripts/setup.sh` asks which provider you want and sets the `AGENT_PROVIDER` repository variable for you. Skip the prompt with `AGENT_PROVIDER=claude`, or skip the whole step with `SKIP_AGENT_SETUP=1`. Setting up by hand: `Settings → Secrets and variables → Actions → Variables`.
 
-| Value | Status | Required secret |
-|-------|--------|-----------------|
-| `claude` (default) | Implemented | `CLAUDE_CODE_OAUTH_TOKEN` |
-| `openai-codex` | **Not implemented** — stub job | `OPENAI_API_KEY`, once you write the job |
-| `copilot` | **Not implemented** — stub job | _(gh-aw setup required — see docs)_ |
-| `custom` | `repository_dispatch` only | _(your own listener — see docs)_ |
+| Value | Status | Required secret | Also needs |
+|-------|--------|-----------------|------------|
+| `claude` (default) | Implemented | `CLAUDE_CODE_OAUTH_TOKEN` | the Claude GitHub App — Step 4 |
+| `openai-codex` | **Not implemented** — stub job | `OPENAI_API_KEY`, once you write the job | — |
+| `copilot` | **Not implemented** — stub job | _(gh-aw setup required — see docs)_ | — |
+| `custom` | `repository_dispatch` only | _(your own listener — see docs)_ | — |
 
 Only `claude` runs an agent today. The `openai-codex` and `copilot` jobs echo a message and exit; `custom` fires a `repository_dispatch` event that does nothing until you add a listener workflow in the same repo. Either way a repo configured for one of them installs cleanly and goes green while labelling an issue produces nothing. `setup.sh` says so when you pick one, and the run itself now fails rather than passing quietly.
 
@@ -70,8 +70,23 @@ If `AGENT_PROVIDER` is not set, the workflow defaults to `claude`.
 
 **The secret is yours to add.** Secrets are write-only, so no script can set one for you — `setup.sh` reports whether it is there and stops short of claiming you are done without it. This matters because nothing else complains: labels sync, CI goes green, and the repo looks configured, but labelling an issue `agent-ready` will not start the agent. Add it with `gh secret set CLAUDE_CODE_OAUTH_TOKEN`, or at `Settings → Secrets and variables → Actions → Secrets`.
 
-**Step 4 — Open an agent-ready issue**
+**Step 4 — Install the Claude GitHub App**
 
+If you already use Claude Code in a terminal, run `/install-github-app` — it sets up the app and the secret together, and most people who have used Claude Code have already done this once.
+
+Otherwise install it at **https://github.com/apps/claude** → **Configure** → select the repository. Repository admin is required.
+
+The secret on its own is not enough *as these workflows are written*. `anthropics/claude-code-action` exchanges the workflow's OIDC token for a GitHub App installation token before doing anything, and with no app installed that exchange fails in about 29 seconds:
+
+```
+App token exchange failed: 401 Unauthorized
+```
+
+Labels sync, CI passes, and the trigger fires — so a repository can look completely configured while every agent run dies inside a minute. The same applies to `claude-pr-feedback.yml` and `plan-approval-gate.yml`, which use the same action.
+
+**You can avoid the app**, at a cost. Passing `github_token: ${{ secrets.GITHUB_TOKEN }}` to the action skips the exchange entirely. But GitHub does not start workflow runs from events triggered by `GITHUB_TOKEN`, so the agent's pull request would arrive with **no CI run on it** — and a PR your test suite never touched is a poor thing to hand a reviewer. The app is the default here for that reason, not because the action demands it.
+
+**Step 5 — Open an agent-ready issue**
 Use the **Agent-Ready Task** issue template. Fill in all sections, add a `complexity:` label, then **add `agent-ready` yourself** — that label is what starts the agent.
 
 The auto-labeler does not apply `agent-ready` and cannot start a run. It applies `agent-candidate` to issues that have the right shape — a review hint. Only `agent-ready`, applied by a person, starts the agent.
