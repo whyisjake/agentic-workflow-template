@@ -26,6 +26,7 @@
 #   - Adds .github/workflows/  (all agent workflow files, skips any that already exist)
 #   - Adds .github/agents/issue-screener.agent.md
 #   - Adds scripts/validate-workflows.sh  (the workflow YAML + permission guard)
+#   - Adds .github/actions/claude-run/       (the shared agent invocation)
 #   - Creates docs/ if it doesn't exist
 #   - Sets the AGENT_PROVIDER repository variable, and reports on the secret
 #   - Prints next steps
@@ -192,6 +193,21 @@ if [[ -f ".github/agents/issue-screener.agent.md" ]]; then
 else
   fetch ".github/agents/issue-screener.agent.md" ".github/agents/issue-screener.agent.md"
   green "  added: .github/agents/issue-screener.agent.md"
+fi
+
+# ── Composite action ──────────────────────────────────────────────────────────
+# The workflows call ./.github/actions/claude-run rather than the upstream
+# action directly, so the permission mode and allow list have one definition.
+# A repo that gets the workflows without this directory has three workflows
+# referencing an action that does not exist, and every agent run fails at
+# startup — so this is not optional and is installed even if it already exists
+# in some other form.
+
+if [[ -f ".github/actions/claude-run/action.yml" ]]; then
+  yellow "  skipped (already exists): .github/actions/claude-run/action.yml"
+else
+  fetch ".github/actions/claude-run/action.yml" ".github/actions/claude-run/action.yml"
+  green "  added: .github/actions/claude-run/action.yml"
 fi
 
 # ── Scripts ───────────────────────────────────────────────────────────────────

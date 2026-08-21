@@ -94,7 +94,8 @@ while IFS= read -r file; do
     red   "  FAILED TO PARSE: $file"
     printf '%s\n' "$error" | sed 's/^/      /'
   fi
-done < <(find "$WORKFLOW_DIR" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) | sort)
+done < <( { find "$WORKFLOW_DIR" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null
+            find .github/actions -mindepth 2 -maxdepth 2 -type f -name 'action.yml' 2>/dev/null; } | sort )
 
 echo ""
 
@@ -137,9 +138,15 @@ check_permissions() {
   # Bash(<cmd> ...) entries inside any "allow" array, from the workflows and
   # from .claude/settings.json, which ships with the template and is read by
   # the agent at runtime.
+  # Follow the allow list wherever it lives. It moved out of the workflows and
+  # into .github/actions/claude-run/action.yml when the block was extracted, and
+  # a check that only scanned .github/workflows/ passed vacuously the moment it
+  # moved — verified by injecting Bash(curl *) into the composite action and
+  # watching this script report clean.
   local files=()
   while IFS= read -r f; do files+=("$f"); done < <(
-    find "$WORKFLOW_DIR" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null | sort
+    { find "$WORKFLOW_DIR" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) 2>/dev/null
+      find .github/actions -mindepth 2 -maxdepth 2 -type f -name 'action.yml' 2>/dev/null; } | sort
   )
   [[ -f ".claude/settings.json" ]] && files+=(".claude/settings.json")
 
@@ -178,3 +185,35 @@ check_permissions() {
 }
 
 check_permissions || exit 1
+
+# ── Timeout parity ────────────────────────────────────────────────────────────
+# The 30-minute cap could not move into the composite action: GitHub Actions
+# ignores timeout-minutes on a step inside one. So it stays duplicated per job,
+# and duplication is what this file exists to police. A job that quietly drops
+# back to the 15-minute default kills real work mid-verification and reports a
+# cancellation, not a failure.
+
+check_timeouts() {
+  local expected="30" bad=0
+  while IFS= read -r f; do
+    while IFS= read -r line; do
+      local val="${line##*timeout-minutes: }"
+      if [[ "$val" != "$expected" ]]; then
+        red "  timeout-minutes: $val in $f (expected $expected)"
+        bad=1
+      fi
+    done < <(grep -h "timeout-minutes:" "$f" 2>/dev/null | grep -v "^\s*#")
+  done < <(grep -rl "claude-run\|claude-code-action" "$WORKFLOW_DIR" 2>/dev/null | sort)
+
+  if [[ "$bad" -gt 0 ]]; then
+    echo ""
+    red "Agent jobs disagree on timeout-minutes."
+    red "A real feature took 20m25s against a 15-minute cap and was killed"
+    red "mid-verification. Keep every agent job at $expected."
+    return 1
+  fi
+  green "Agent job timeouts agree ($expected minutes)."
+  return 0
+}
+
+check_timeouts || exit 1

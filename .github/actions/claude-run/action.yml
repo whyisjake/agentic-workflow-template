@@ -1,0 +1,105 @@
+name: "Run Claude Code"
+description: >-
+  Invokes anthropics/claude-code-action with this repository's agreed permission
+  mode and allow list. One definition, four call sites.
+
+# Why this exists
+#
+# The permission mode, allow list and deny list were duplicated across four call
+# sites in three workflow files. They drifted once already, and a drifted allow
+# list is a security problem rather than an inconvenience: the issue body is
+# untrusted input that reaches the model as instructions, so anything allowed is
+# reachable by whoever can get an issue labelled.
+#
+# What is NOT here, and why
+#
+# `timeout-minutes` stays in the calling job. GitHub Actions does not support it
+# on a step inside a composite action — writing it here would be silently
+# ignored, which is worse than duplicating it. scripts/validate-workflows.sh
+# checks the job-level values still agree.
+#
+# Credentials arrive as inputs because a composite action cannot read the
+# `secrets` context. Callers pass `${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}`.
+
+inputs:
+  oauth_token:
+    description: "Claude Code OAuth token (from `claude setup-token`)."
+    required: true
+  prompt:
+    description: >-
+      Instructions for the agent. Leave empty to select the action's tag mode,
+      which claude-pr-feedback.yml relies on.
+    required: false
+    default: ""
+  trigger_phrase:
+    description: "Phrase that triggers tag mode. Only meaningful when `prompt` is empty."
+    required: false
+    default: "@claude"
+  additional_permissions:
+    description: "Extra GitHub permissions for the app token exchange."
+    required: false
+    default: |
+      actions: read
+
+runs:
+  using: composite
+  steps:
+    - name: Claude Code
+      id: claude
+      uses: anthropics/claude-code-action@239e3a730883eeb5c53db12b0fc9573b3024b126 # v1.0.191
+      with:
+        claude_code_oauth_token: ${{ inputs.oauth_token }}
+        prompt: ${{ inputs.prompt }}
+        trigger_phrase: ${{ inputs.trigger_phrase }}
+        additional_permissions: ${{ inputs.additional_permissions }}
+
+        # The permission mode has to travel here. Setting permissions.defaultMode
+        # in `settings` below does NOT reach the SDK: a run configured that way
+        # reports "permissionMode": "default" and refuses every write, which is
+        # what stopped this template opening a pull request at all.
+        claude_args: --permission-mode acceptEdits
+
+        # Add your project's own test and lint commands to `allow` below —
+        # e.g. "Bash(npm test)", "Bash(vendor/bin/phpunit)", "Bash(pytest)".
+        # Without them the agent cannot verify its own work: it spends turns on
+        # commands that are refused, and a refusal reads to it like a broken
+        # environment rather than a policy decision. Observed: 9 permission
+        # denials on a run whose issue asked it to make tests pass.
+        #
+        # This list is NOT a sandbox. "Bash(git *)" and "Bash(gh *)" are
+        # deliberate exceptions — the run cannot commit or open a pull request
+        # without them — and both permit arbitrary execution (`git -c
+        # core.pager=...`) and egress (`git push <url>`, `gh gist create`). The
+        # deny list closes the escapes we know about; it is not a proof.
+        #
+        # The real boundary is upstream: who can cause a run to start.
+        #
+        # scripts/validate-workflows.sh rejects wildcard entries that run an
+        # arbitrary program or reach the network, so a widened list fails CI.
+        settings: |
+          {
+            "permissions": {
+              "defaultMode": "acceptEdits",
+              "allow": [
+                "Bash(git *)",
+                "Bash(gh *)",
+                "Bash(ls *)",
+                "Bash(cat *)",
+                "Bash(mkdir *)",
+                "Bash(rm *)",
+                "Bash(mv *)",
+                "Bash(cp *)",
+                "Bash(which *)",
+                "Bash(bash scripts/validate-workflows.sh)"
+              ],
+              "deny": [
+                "Bash(git -c *)",
+                "Bash(git config *)",
+                "Bash(git remote *)",
+                "Bash(gh api *)",
+                "Bash(gh gist *)",
+                "Bash(gh alias *)",
+                "Bash(gh extension *)"
+              ]
+            }
+          }
