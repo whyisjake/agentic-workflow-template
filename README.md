@@ -91,6 +91,8 @@ Use the **Agent-Ready Task** issue template. Fill in all sections, add a `comple
 
 The auto-labeler does not apply `agent-ready` and cannot start a run. It applies `agent-candidate` to issues that have the right shape — a review hint. Only `agent-ready`, applied by a person, starts the agent.
 
+**A malformed issue is refused rather than attempted.** When you apply `agent-ready`, the trigger runs the same structural check and stops if sections are missing, commenting with what to add. That check is structural only: it confirms the sections exist, not that they say anything useful. An issue with every heading and nothing under them will pass it — which is exactly why the label a machine applies is a hint and the label that starts a run is applied by a person.
+
 **Only a collaborator with write access can start a run.** The trigger checks who applied the label and stops if they do not have it. This is the security boundary that matters: an agent run holds a write-scoped token and takes the issue body as instructions, so anyone who can start one can direct it. Someone without write access can still open and describe an issue — they just cannot fire the agent themselves.
 
 Add the complexity label **before** `agent-ready`, and this order matters. Only the `agent-ready` label starts a run, and the trigger then reads the issue's full label set from the API — so a `complexity:high` issue that gains its complexity label *after* `agent-ready` has already fired will have taken the direct path and skipped planning.
