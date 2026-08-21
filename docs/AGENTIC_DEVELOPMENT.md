@@ -20,12 +20,26 @@ This guide teaches you how to write issues that agents can actually execute, how
 
 | Provider | AGENT_PROVIDER value | Required secret | Notes |
 |----------|---------------------|-----------------|-------|
-| Claude + Compound Engineering | `claude` (default) | `CLAUDE_CODE_OAUTH_TOKEN` | Implemented — complexity-aware, planning phase for high complexity |
+| Claude + Compound Engineering | `claude` (default) | `CLAUDE_CODE_OAUTH_TOKEN` + the Claude GitHub App | Implemented — complexity-aware, planning phase for high complexity |
 | OpenAI Codex | `openai-codex` | `OPENAI_API_KEY`, once you write the job | **Not implemented** — `trigger-openai-codex` echoes and exits |
-| GitHub Copilot (gh-aw) | `copilot` | _(gh-aw setup)_ | **Not implemented** — `trigger-copilot` echoes and exits |
-| Custom / bring-your-own | `custom` | _(your own)_ | Dispatches `repository_dispatch` event; add your listener |
+| GitHub Copilot (gh-aw) | `copilot` | _(gh-aw setup)_ | **Not implemented** — `trigger-copilot` echoes and exits || Custom / bring-your-own | `custom` | _(your own)_ | Dispatches `repository_dispatch` event; add your listener |
 
 Set `AGENT_PROVIDER` in **Settings → Secrets and variables → Variables**. If not set, the workflow defaults to `claude`.
+
+### The Claude provider needs two things, not one
+
+The secret authenticates the model. The **Claude GitHub App** is what lets the action act on the repository — open branches, comment, push. `anthropics/claude-code-action` exchanges credentials for an app installation token as its first step, so with no app installed every run fails in seconds with:
+
+```
+App token exchange failed: 401 Unauthorized —
+Claude Code is not installed on this repository.
+```
+
+Run `/install-github-app` from Claude Code in a terminal — it sets up the app and the secret together, and is how most people already have it. Otherwise install at **https://github.com/apps/claude** (repository admin required).
+
+This is a property of how these workflows are configured, not of the action. Passing `github_token: ${{ secrets.GITHUB_TOKEN }}` skips the app entirely — at the cost of the agent's pull request getting no CI run, since GitHub does not start workflows from `GITHUB_TOKEN` events.
+
+Nothing upstream of the agent notices this is missing: labels sync, the auto-labeler flags the issue `agent-candidate`, and the trigger fires as soon as someone applies `agent-ready` — so the failure looks like a broken agent rather than an unfinished setup. Check it before assuming the token is wrong.
 
 ---
 

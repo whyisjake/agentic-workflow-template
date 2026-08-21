@@ -392,23 +392,38 @@ jobs:
             in the plan) so a reviewer can check it. A confident PR built on a guessed
             interface passes review and fails in production.
 
-      - name: Check for missing CLAUDE_CODE_OAUTH_TOKEN
+      # Names what could be wrong and points at the log, rather than asserting a
+      # cause it cannot know. Observed 21 August: the old text blamed a missing
+      # CLAUDE_CODE_OAUTH_TOKEN on a repository where the secret was correctly
+      # set — and posted that twice — sending the reader to the one place they
+      # did not need to look.
+      #
+      # cancelled() is in the gate because a timeout is a cancellation, not a
+      # failure. Without it the reporter is skipped and the issue is told nothing
+      # at all, which is the worst outcome of the three.
+      - name: Report agent failure
         if: failure() || cancelled()
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.issue.number,
               body: [
-                '⚠️ **Agent setup incomplete**',
+                '⚠️ **The agent run failed**',
                 '',
-                'The Claude Code workflow failed. This is usually caused by a missing `CLAUDE_CODE_OAUTH_TOKEN` secret.',
+                `The failing step and its error are in the [job log](${runUrl}) — start there.`,
                 '',
-                'To fix: go to **Settings → Secrets and variables → Secrets** and add `CLAUDE_CODE_OAUTH_TOKEN`.',
+                'The Claude provider needs two things, and setup is incomplete if either is missing:',
                 '',
-                'See the [README](../blob/main/README.md) for setup instructions.'
+                '- the `CLAUDE_CODE_OAUTH_TOKEN` secret — **Settings → Secrets and variables → Secrets**',
+                '- the **Claude GitHub App** installed on this repository — https://github.com/apps/claude',
+                '',
+                'A missing app shows up as `App token exchange failed: 401 Unauthorized` within a few seconds of the run starting.',
+                '',
+                'See the [README](../blob/main/README.md) for the full setup.'
               ].join('\n')
             });
 
