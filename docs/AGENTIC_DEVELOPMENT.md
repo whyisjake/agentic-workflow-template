@@ -31,13 +31,20 @@ Set `AGENT_PROVIDER` in **Settings → Secrets and variables → Variables**. If
 
 ## What the Agent Can and Cannot Do in CI
 
-Four constraints decide whether a run produces a pull request or nothing at all. The first is not optional.
+Five constraints decide whether a run produces a pull request or nothing at all. The first is not optional, and the second is a security boundary.
 
 **The permission mode is passed through `claude_args`, not `settings`.** `claude-code-action` runs interactively by default: in CI every `Write` waits on an approval nobody can give, and the run either produces nothing or burns to its timeout. Setting `permissions.defaultMode` inside the `settings` input looks like the fix and is not — a run configured that way reports `"permissionMode": "default"` and still refuses every write. The workflows here pass `claude_args: --permission-mode acceptEdits`, which does reach the SDK.
 
-**The allow list must include your project's own tooling.** `allow` grants Bash patterns; anything outside it is refused. The shipped list covers git, gh and common file utilities, and it deliberately does not know how your project runs its tests. Add that — `Bash(npm *)`, `Bash(php *)`, `Bash(pytest *)`, whatever applies — or the agent cannot verify its own work before opening a PR, while the issue template's "Tests pass" criterion asks it to. Observed cost of getting this wrong: roughly six minutes of a fifteen-minute budget spent re-attempting commands that could never be allowed.
+**The allow list is a trust boundary, and you will need to widen it.** `allow` grants Bash patterns; anything outside it is refused. The shipped list covers git, gh and read-only file utilities, and it deliberately does not know how your project runs its tests. Add that — `Bash(npm test)`, `Bash(php *)`, `Bash(pytest *)`, whatever applies — or the agent cannot verify its own work before opening a PR, while the issue template's "Tests pass" criterion asks it to. Observed cost of getting this wrong: roughly six minutes of a fifteen-minute budget spent re-attempting commands that could never be allowed.
 
-**A refusal does not look like a policy decision to the agent.** Blocked commands come back as errors, and a model reasonably concludes the environment lacks the capability. In one run a blocked `curl` led the agent to state, in its PR body and in a committed fixture, that the environment had no network access — it had network; the command was not allowed. Anything you do not allow, expect to see described as impossible.
+Widen it deliberately, because of who is on the other end. **The issue body is untrusted input that reaches the model as instructions**, and the run carries `contents: write`, `pull-requests: write` and `issues: write` with writes pre-approved by `acceptEdits`. Anyone who can open an issue in your repository can therefore reach every command in this list. Two categories are worth refusing outright:
+
+- **Anything that runs an arbitrary program.** `Bash(find *)` executes anything through `-exec`; `Bash(xargs *)` does the same through `sh -c`. Either one makes the rest of the list decorative.
+- **Anything that reaches the network.** `Bash(curl *)` is outbound egress to any host, which is the step that turns "read the checkout" into "send the checkout somewhere".
+
+Prefer the narrowest pattern that does the job: `Bash(npm test)` over `Bash(npm *)`, `Bash(composer install)` over `Bash(composer *)`. A wildcard is a subcommand you have not thought about yet.
+
+**A refusal does not look like a policy decision to the agent.** This is the cost of the boundary above, and it is worth paying. Blocked commands come back as errors, and a model reasonably concludes the environment lacks the capability. In one run a blocked `curl` led the agent to state, in its PR body and in a committed fixture, that the environment had no network access — it had network; the command was not allowed. Anything you do not allow, expect to see described as impossible.
 
 **An agent cannot modify `.github/workflows/`.** The GitHub App token has no `workflows` permission, so a push touching a workflow file fails with `refusing to allow a GitHub App to create or update workflow ... without 'workflows' permission`. An agent that writes tests therefore cannot wire them into CI; it has to hand you the YAML and you paste it. Worth saying in the issue when the task involves CI.
 

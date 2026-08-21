@@ -110,6 +110,15 @@ jobs:
           # agent cannot verify its own work: it spends turns on commands that are
           # refused, and a refusal reads to it like a broken environment rather than
           # a policy decision.
+          #
+          # This list is a trust boundary, not a convenience list. The issue body
+          # is untrusted input that reaches the model as instructions, and the
+          # agent runs with acceptEdits and a write-scoped token — so anything you
+          # allow here is reachable by anyone who can open an issue. Avoid patterns
+          # that run an arbitrary program or reach the network: "Bash(find *)" and
+          # "Bash(xargs *)" both execute anything via -exec and sh -c, and
+          # "Bash(curl *)" is outbound egress to any host. Prefer narrow patterns
+          # over wildcards where you can: "Bash(npm test)" beats "Bash(npm *)".
           settings: |
             {
               "permissions": {
@@ -119,14 +128,11 @@ jobs:
                   "Bash(gh *)",
                   "Bash(ls *)",
                   "Bash(cat *)",
-                  "Bash(find *)",
-                  "Bash(xargs *)",
                   "Bash(mkdir *)",
                   "Bash(rm *)",
                   "Bash(mv *)",
                   "Bash(cp *)",
-                  "Bash(which *)",
-                  "Bash(curl *)"
+                  "Bash(which *)"
                 ]
               }
             }
