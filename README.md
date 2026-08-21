@@ -57,12 +57,14 @@ Actions → Setup Labels → Run workflow
 
 `scripts/setup.sh` asks which provider you want and sets the `AGENT_PROVIDER` repository variable for you. Skip the prompt with `AGENT_PROVIDER=claude`, or skip the whole step with `SKIP_AGENT_SETUP=1`. Setting up by hand: `Settings → Secrets and variables → Actions → Variables`.
 
-| Variable | Value | Required secret |
-|----------|-------|-----------------|
-| `AGENT_PROVIDER` | `claude` (default) | `CLAUDE_CODE_OAUTH_TOKEN` |
-| `AGENT_PROVIDER` | `openai-codex` | `OPENAI_API_KEY` |
-| `AGENT_PROVIDER` | `copilot` | _(gh-aw setup required — see docs)_ |
-| `AGENT_PROVIDER` | `custom` | _(your own listener — see docs)_ |
+| Value | Status | Required secret |
+|-------|--------|-----------------|
+| `claude` (default) | Implemented | `CLAUDE_CODE_OAUTH_TOKEN` |
+| `openai-codex` | **Not implemented** — stub job | `OPENAI_API_KEY`, once you write the job |
+| `copilot` | **Not implemented** — stub job | _(gh-aw setup required — see docs)_ |
+| `custom` | `repository_dispatch` only | _(your own listener — see docs)_ |
+
+Only `claude` runs an agent today. The `openai-codex` and `copilot` jobs echo a message and exit; `custom` fires a `repository_dispatch` event that does nothing until you add a listener workflow in the same repo. Either way a repo configured for one of them installs cleanly and goes green while labelling an issue produces nothing. `setup.sh` says so when you pick one, and the run itself now fails rather than passing quietly.
 
 If `AGENT_PROVIDER` is not set, the workflow defaults to `claude`.
 
@@ -78,10 +80,10 @@ Use the **Agent-Ready Task** issue template. Fill in all sections. When the issu
 
 | Provider | Status | Notes |
 |----------|--------|-------|
-| **Claude + Compound Engineering** | ✅ Full support | Complexity-aware: high issues plan first, low/medium execute directly |
-| **OpenAI Codex** | 🔧 Stub — extend to fit your setup | See `.github/workflows/agent-ready-trigger.yml` |
-| **GitHub Copilot (gh-aw)** | 🔧 Stub — extend to fit your setup | Requires `gh aw compile` setup |
-| **Custom** | 🔧 `repository_dispatch` event | Wire your own agent listener in the same repo |
+| **Claude + Compound Engineering** | Implemented | Complexity-aware: high issues plan first, low/medium execute directly |
+| **OpenAI Codex** | **Not implemented** — stub job | Write `trigger-openai-codex` in `.github/workflows/agent-ready-trigger.yml` |
+| **GitHub Copilot (gh-aw)** | **Not implemented** — stub job | Write `trigger-copilot`; requires `gh aw compile` setup |
+| **Custom** | `repository_dispatch` only | Dispatches the issue payload; wire your own listener in the same repo |
 
 ---
 

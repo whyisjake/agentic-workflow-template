@@ -232,10 +232,10 @@ else
   if [[ -z "$provider" ]]; then
     if [[ -t 0 ]]; then
       echo "  Which agent should run agent-ready issues?"
-      echo "    1) claude        — full support"
-      echo "    2) openai-codex  — stub, you extend it"
-      echo "    3) copilot       — stub, you extend it"
-      echo "    4) custom        — repository_dispatch to your own listener"
+      echo "    1) claude        — the only provider implemented"
+      echo "    2) openai-codex  — NOT IMPLEMENTED: a stub you must write yourself"
+      echo "    3) copilot       — NOT IMPLEMENTED: a stub you must write yourself"
+      echo "    4) custom        — repository_dispatch only; you write the listener"
       choice=""
       read -r -p "  Choice [1]: " choice || true
       case "${choice:-1}" in
@@ -282,11 +282,52 @@ else
     echo "    AGENT_PROVIDER = $provider"
   fi
 
+  # Say plainly when the chosen provider does not do anything yet.
+  #
+  # Only the claude path is implemented. openai-codex and copilot are stub jobs
+  # that echo and exit; custom dispatches a repository_dispatch event and needs a
+  # listener that does not exist yet. Either way the repo installs cleanly, syncs
+  # its labels, goes green, and then produces nothing the first time someone
+  # labels an issue.
+  #
+  # This is one of two places that says so — the stub jobs themselves now comment
+  # on the issue and fail, which is the signal that reaches someone who never ran
+  # this script.
+  case "$provider" in
+    openai-codex|copilot)
+      echo ""
+      red   "  '$provider' is not implemented — its job is a stub."
+      echo  "  trigger-$provider in .github/workflows/agent-ready-trigger.yml echoes a"
+      echo  "  message and exits without running an agent or opening a pull request."
+      echo  "  Labelling an issue agent-ready under this provider will not produce a PR"
+      echo  "  until you write that job yourself."
+      echo  "  For a working agent, re-run with: AGENT_PROVIDER=claude bash scripts/setup.sh"
+      echo ""
+      PROVIDER_NEXT_STEP="Provider is $provider, which is a stub — implement trigger-$provider, or switch to claude."
+      ;;
+    custom)
+      echo ""
+      yellow "  'custom' dispatches; it does not implement."
+      echo   "  trigger-custom fires a repository_dispatch 'agent-ready' event carrying the"
+      echo   "  issue payload. Nothing consumes it until you add a listener workflow in THIS"
+      echo   "  repository — repository_dispatch is not cross-repo."
+      echo   "  For a working agent without writing one, re-run with: AGENT_PROVIDER=claude"
+      echo ""
+      PROVIDER_NEXT_STEP="Provider is custom — add a listener workflow for the repository_dispatch 'agent-ready' event."
+      ;;
+  esac
+
   # Report on the secret. Never set it.
   secret="$(secret_for_provider "$provider")"
-  if [[ -z "$secret" ]]; then
+  if [[ "$provider" != "claude" && -n "$secret" ]]; then
+    # Name it without failing on it. trigger-openai-codex really does read
+    # secrets.OPENAI_API_KEY, so staying silent here would trade one silent gap
+    # for another — but the job is a stub, so a missing secret is not yet what
+    # stops it working.
+    dim "  Not checking for $secret — the stub never gets far enough to read it."
+    dim "  You will need it once you write the job."
+  elif [[ -z "$secret" ]]; then
     dim "  Provider '$provider' has no single required secret — its credentials are yours to wire up."
-    PROVIDER_NEXT_STEP="Provider is $provider — wire up its credentials and listener yourself."
   else
     if [[ "$variable_set" == "yes" ]] && gh secret list 2>/dev/null | awk '{print $1}' | grep -qx "$secret"; then
       green "  found: $secret is already set"
