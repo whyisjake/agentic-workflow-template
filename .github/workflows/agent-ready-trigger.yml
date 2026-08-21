@@ -26,10 +26,15 @@ env:
 jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   # CLAUDE (default)
-  # Uses Claude Code with Compound Engineering for complexity-aware execution.
+  # Complexity-aware execution.
   #
-  # complexity:high  → /ce-plan first, human approves via /approve-plan, then /ce-work
-  # complexity:low/medium (or absent) → /ce-work directly
+  # complexity:high  → plan first, human approves by commenting /approve-plan,
+  #                    then plan-approval-gate.yml implements it
+  # complexity:low/medium (or absent) → implement directly
+  #
+  # The prompts below spell out the work rather than invoking the
+  # compound-engineering plugin's /ce-plan and /ce-work, which are local-only and
+  # not available on a GitHub runner.
   # ─────────────────────────────────────────────────────────────────────────────
   trigger-claude:
     if: vars.AGENT_PROVIDER == 'claude' || vars.AGENT_PROVIDER == ''

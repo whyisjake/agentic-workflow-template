@@ -1,9 +1,14 @@
-# Listens for '/approve-plan' comments on issues and resumes ce-work execution.
+# Listens for '/approve-plan' comments on issues and implements the approved plan.
 #
 # This workflow is part of the complexity:high flow:
-#   1. agent-ready-trigger.yml fires, Claude runs /ce-plan, commits plan to docs/plans/
+#   1. agent-ready-trigger.yml fires, Claude writes a plan, commits it to a plan/ branch
 #   2. Claude posts a comment asking for /approve-plan
-#   3. This workflow fires on that comment, verifies the commenter, then runs /ce-work
+#   3. This workflow fires on that comment, verifies the commenter, then implements
+#
+# Note: '/approve-plan' is a comment this workflow matches on, not a Claude Code slash
+# command. The compound-engineering plugin's /ce-plan and /ce-work are local-only and
+# are NOT available on a GitHub runner, so every prompt here spells the work out
+# directly instead of invoking them.
 #
 # Only collaborators with write or admin permission can approve plans.
 # Non-collaborators receive a reply comment but no agent run is started.
@@ -111,7 +116,7 @@ jobs:
               core.setOutput('already_running', 'false');
             }
 
-      - name: Run Claude Code with /ce-work
+      - name: Run Claude Code — implement the approved plan
         if: |
           steps.permission-check.outputs.allowed == 'true' &&
           steps.pr-check.outputs.already_running == 'false'
@@ -194,9 +199,9 @@ jobs:
                  git show origin/plan/issue-${{ github.event.issue.number }} --stat
                  git checkout origin/plan/issue-${{ github.event.issue.number }} -- docs/plans/
                If that branch does not exist, look for a recent file in docs/plans/ instead.
-            2. If a plan file exists, invoke /ce-work with the plan file path as input,
-               and carry the plan file itself into your branch so the reasoning ships
-               alongside the code
+            2. If a plan file exists, read it in full and implement it. Work through
+               its implementation units in order, and carry the plan file itself into
+               your branch so the reasoning ships alongside the code
             3. If no plan file exists, say so in a comment on the issue before you
                implement anything — an approved plan that cannot be found is worth
                reporting, not working around silently
