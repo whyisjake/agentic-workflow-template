@@ -255,7 +255,11 @@ jobs:
             6. After committing, post a comment on the issue with:
                - A link to the plan file (GitHub URL)
                - "Implementation plan is ready for review. Reply /approve-plan to begin
-                 implementation, or comment with feedback to revise the plan."
+                 implementation."
+               - "To change the plan first: edit the file on the plan branch, or add
+                 your feedback to this issue and re-apply the agent-ready label to
+                 replan. Commenting alone does not trigger anything — only
+                 /approve-plan is listened for."
             7. Do NOT write any application code
             8. Do NOT open a pull request
 
