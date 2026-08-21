@@ -72,19 +72,35 @@ jobs:
           # blocks on an approval nobody can give. See the PR for the transcripts.
           claude_args: --permission-mode acceptEdits
           # Add your project's own test and lint commands to `allow` below —
-          # e.g. "Bash(npm *)", "Bash(php *)", "Bash(pytest *)". Without them the
+          # e.g. "Bash(npm test)", "Bash(vendor/bin/phpunit)", "Bash(pytest)".
+          # Prefer the narrowest pattern that works: a wildcard is a subcommand you
+          # have not thought about yet, and "Bash(php *)" is "php -r '<any code>'".
+          # Without them the
           # agent cannot verify its own work: it spends turns on commands that are
           # refused, and a refusal reads to it like a broken environment rather than
           # a policy decision.
           #
-          # This list is a trust boundary, not a convenience list. The issue body
-          # is untrusted input that reaches the model as instructions, and the
-          # agent runs with acceptEdits and a write-scoped token — so anything you
-          # allow here is reachable by anyone who can open an issue. Avoid patterns
-          # that run an arbitrary program or reach the network: "Bash(find *)" and
-          # "Bash(xargs *)" both execute anything via -exec and sh -c, and
-          # "Bash(curl *)" is outbound egress to any host. Prefer narrow patterns
-          # over wildcards where you can: "Bash(npm test)" beats "Bash(npm *)".
+          # What this list is, and what it is not.
+          #
+          # The issue body is untrusted input that reaches the model as
+          # instructions, and the run holds a write-scoped token with edits
+          # pre-approved. So every entry here is reachable by whoever can get an
+          # issue labelled.
+          #
+          # This list is NOT a sandbox, and you should not treat it as one.
+          # "Bash(git *)" and "Bash(gh *)" are deliberate exceptions — the run
+          # cannot commit or open a pull request without them — and both permit
+          # far more than that: `git -c core.pager=...` and `git -c alias.x='!...'`
+          # run arbitrary programs, and `git push <url>` and `gh gist create` send
+          # data off the runner. The `deny` list below closes the escapes we know
+          # about; it does not make the allow list airtight.
+          #
+          # The real boundary is upstream: who can cause a run to start. Keep the
+          # trigger gated on a labelling actor with write access, and treat any
+          # agent run as capable of whatever the workflow token can do.
+          #
+          # When you widen this list, narrow patterns are still worth preferring:
+          # "Bash(npm test)" beats "Bash(npm *)".
           settings: |
             {
               "permissions": {
@@ -99,6 +115,15 @@ jobs:
                   "Bash(mv *)",
                   "Bash(cp *)",
                   "Bash(which *)"
+                ],
+                "deny": [
+                  "Bash(git -c *)",
+                  "Bash(git config *)",
+                  "Bash(git remote *)",
+                  "Bash(gh api *)",
+                  "Bash(gh gist *)",
+                  "Bash(gh alias *)",
+                  "Bash(gh extension *)"
                 ]
               }
             }
@@ -152,19 +177,35 @@ jobs:
           # blocks on an approval nobody can give. See the PR for the transcripts.
           claude_args: --permission-mode acceptEdits
           # Add your project's own test and lint commands to `allow` below —
-          # e.g. "Bash(npm *)", "Bash(php *)", "Bash(pytest *)". Without them the
+          # e.g. "Bash(npm test)", "Bash(vendor/bin/phpunit)", "Bash(pytest)".
+          # Prefer the narrowest pattern that works: a wildcard is a subcommand you
+          # have not thought about yet, and "Bash(php *)" is "php -r '<any code>'".
+          # Without them the
           # agent cannot verify its own work: it spends turns on commands that are
           # refused, and a refusal reads to it like a broken environment rather than
           # a policy decision.
           #
-          # This list is a trust boundary, not a convenience list. The issue body
-          # is untrusted input that reaches the model as instructions, and the
-          # agent runs with acceptEdits and a write-scoped token — so anything you
-          # allow here is reachable by anyone who can open an issue. Avoid patterns
-          # that run an arbitrary program or reach the network: "Bash(find *)" and
-          # "Bash(xargs *)" both execute anything via -exec and sh -c, and
-          # "Bash(curl *)" is outbound egress to any host. Prefer narrow patterns
-          # over wildcards where you can: "Bash(npm test)" beats "Bash(npm *)".
+          # What this list is, and what it is not.
+          #
+          # The issue body is untrusted input that reaches the model as
+          # instructions, and the run holds a write-scoped token with edits
+          # pre-approved. So every entry here is reachable by whoever can get an
+          # issue labelled.
+          #
+          # This list is NOT a sandbox, and you should not treat it as one.
+          # "Bash(git *)" and "Bash(gh *)" are deliberate exceptions — the run
+          # cannot commit or open a pull request without them — and both permit
+          # far more than that: `git -c core.pager=...` and `git -c alias.x='!...'`
+          # run arbitrary programs, and `git push <url>` and `gh gist create` send
+          # data off the runner. The `deny` list below closes the escapes we know
+          # about; it does not make the allow list airtight.
+          #
+          # The real boundary is upstream: who can cause a run to start. Keep the
+          # trigger gated on a labelling actor with write access, and treat any
+          # agent run as capable of whatever the workflow token can do.
+          #
+          # When you widen this list, narrow patterns are still worth preferring:
+          # "Bash(npm test)" beats "Bash(npm *)".
           settings: |
             {
               "permissions": {
@@ -179,6 +220,15 @@ jobs:
                   "Bash(mv *)",
                   "Bash(cp *)",
                   "Bash(which *)"
+                ],
+                "deny": [
+                  "Bash(git -c *)",
+                  "Bash(git config *)",
+                  "Bash(git remote *)",
+                  "Bash(gh api *)",
+                  "Bash(gh gist *)",
+                  "Bash(gh alias *)",
+                  "Bash(gh extension *)"
                 ]
               }
             }
